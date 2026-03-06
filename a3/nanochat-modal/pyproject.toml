@@ -1,0 +1,13 @@
+[project]
+name = "ablation-swiglu-modal"
+version = "0.1.0"
+description = "Modal runs for nanochat picochat baseline + SwiGLU ablation (Run1/Run2)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "modal>=0.64.0",
+]
+
+[project.optional-dependencies]
+dev = []
+
