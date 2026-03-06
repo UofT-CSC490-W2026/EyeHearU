@@ -26,7 +26,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 
 ### A2 — Eye Hear U: Datasets, Architecture & Data Pipeline
 
-- **Location:** `a2/` (and root-level shared components)
+- **Location:** `a2/`
 - **Parts:**
   - **Part 1:** Aspirational datasets & schemas — ideal training/eval data for isolated signs and mobile-captured scenarios
   - **Part 2:** System architecture — mobile app, FastAPI backend, 3D CNN classifier, Firebase, AWS
@@ -68,6 +68,8 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 │   ├── data/               # Data pipeline scripts
 │   ├── infrastructure/     # Terraform IaC
 │   ├── docs/               # A2 documentation
+│   ├── Dockerfile
+│   ├── docker-compose.yml
 │   └── Project Doc.pdf
 │
 ├── a3/                     # A3: LLM ablations
@@ -76,14 +78,6 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 │       ├── ablation_swiglu/
 │       └── ablation_rmsnorm/
 │
-├── backend/                # Shared backend (root)
-├── mobile/                 # Shared mobile app
-├── ml/                     # Shared ML pipeline
-├── data/                   # Shared data scripts
-├── infrastructure/         # Shared Terraform
-├── docs/                   # Shared docs
-├── Dockerfile
-├── docker-compose.yml
 └── .gitignore
 ```
 
@@ -94,7 +88,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 ### A2 — Eye Hear U (Infrastructure)
 
 ```bash
-cd infrastructure
+cd a2/infrastructure
 terraform init
 terraform apply -var-file=environments/dev.tfvars
 ```
@@ -102,7 +96,7 @@ terraform apply -var-file=environments/dev.tfvars
 ### A2 — Data Pipeline
 
 ```bash
-cd data/scripts
+cd a2/data/scripts
 pip install -r requirements.txt
 export PIPELINE_ENV=local
 python ingest_asl_citizen.py
@@ -113,8 +107,8 @@ python build_unified_dataset.py
 ### A2 — Backend & Mobile
 
 ```bash
-cd backend && pip install -r requirements.txt && cp .env.example .env && uvicorn app.main:app --reload
-cd mobile && npm install && npx expo start
+cd a2/backend && pip install -r requirements.txt && cp .env.example .env && uvicorn app.main:app --reload
+cd a2/mobile && npm install && npx expo start
 ```
 
 ### A3 — Nanochat on Modal
@@ -139,4 +133,4 @@ uv run modal run nanochat_modal.py::stage_pretrain
 
 ---
 
-For detailed documentation, see `docs/architecture.md`, `docs/data_schema.md`, `docs/data_pipeline.md`, and `docs/terraform_guide.md`.
+For detailed documentation, see `a2/docs/architecture.md`, `a2/docs/data_schema.md`, `a2/docs/data_pipeline.md`, and `a2/docs/terraform_guide.md`.

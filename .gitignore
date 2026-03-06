@@ -11,20 +11,14 @@ env/
 
 # Environment files (contain secrets)
 .env
-backend/.env
-firebase-credentials.json
-backend/firebase-credentials.json
+**/firebase-credentials.json
 
 # ML artifacts (large files)
-ml/checkpoints/*.pt
-ml/checkpoints/*.onnx
-data/raw/
-data/processed/
-
-# Pipeline run logs and reports (generated locally and on server)
-data/metadata/
-data/processed/
-data/metadata/
+**/checkpoints/*.pt
+**/checkpoints/*.onnx
+**/data/raw/
+**/data/processed/
+**/data/metadata/
 
 # Video clips
 *.mp4
@@ -40,20 +34,17 @@ Thumbs.db
 *.swo
 
 # React Native / Expo
-mobile/node_modules/
-mobile/.expo/
-mobile/dist/
-mobile/ios/Pods/
-mobile/android/.gradle/
-mobile/android/app/build/
+**/mobile/node_modules/
+**/mobile/.expo/
+**/mobile/dist/
+**/mobile/ios/Pods/
+**/mobile/android/.gradle/
+**/mobile/android/app/build/
 
 # Terraform
-infrastructure/.terraform/
-a2/infrastructure/.terraform/
-infrastructure/*.tfstate
-infrastructure/*.tfstate.*
-a2/infrastructure/*.tfstate
-a2/infrastructure/*.tfstate.*
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
 
 # Misc
 *.log
