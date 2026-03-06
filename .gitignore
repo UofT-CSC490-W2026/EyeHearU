@@ -49,3 +49,6 @@ Thumbs.db
 # Misc
 *.log
 *.tmp
+
+#a3
+nanochat/
