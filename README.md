@@ -10,7 +10,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 
 | Assignment | Focus | Contents |
 |------------|-------|----------|
-| **A1** | Project proposal & planning | Initial project idea, problem statement, and team planning |
+| **A1** | Project proposal and planning | Initial project idea, problem statement, and team planning |
 | **A2** | Full-stack ASL app + infrastructure | Datasets, architecture, data pipeline, Terraform IaC, backend, mobile, ML |
 | **A3** | LLM ablations on Modal | Nanochat baseline + SwiGLU / RMSNorm ablations, cloud training |
 
