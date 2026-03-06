@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Eye Hear U",
+    "slug": "eye-hear-u",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#4A90D9"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.eyehearu.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Eye Hear U needs camera access to recognize ASL signs."
+      }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Eye Hear U to access your camera to recognize ASL signs."
+        }
+      ],
+      "expo-asset"
+    ],
+    "scheme": "eyehearu"
+  }
+}

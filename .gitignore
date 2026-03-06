@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Environment files (contain secrets)
+.env
+**/firebase-credentials.json
+
+# ML artifacts (large files)
+**/checkpoints/*.pt
+**/checkpoints/*.onnx
+**/data/raw/
+**/data/processed/
+**/data/metadata/
+
+# Video clips
+*.mp4
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# React Native / Expo
+**/mobile/node_modules/
+**/mobile/.expo/
+**/mobile/dist/
+**/mobile/ios/Pods/
+**/mobile/android/.gradle/
+**/mobile/android/app/build/
+
+# Terraform
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+
+# Misc
+*.log
+*.tmp

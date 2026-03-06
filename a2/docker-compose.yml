@@ -1,0 +1,22 @@
+# Docker Compose for local development
+# Usage: docker-compose up --build
+
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app          # Hot-reload app code
+      - ./ml/checkpoints:/app/checkpoints  # Model files
+    environment:
+      - DEBUG=true
+      - MODEL_PATH=/app/checkpoints/best_model.pt
+      - MODEL_DEVICE=cpu
+    # Uncomment when Firebase is configured:
+    # env_file:
+    #   - backend/.env
