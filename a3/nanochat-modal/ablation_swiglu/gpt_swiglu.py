@@ -22,6 +22,7 @@ from nanochat.flash_attention import flash_attn
 
 from nanochat.gpt import (
     GPTConfig,
+    Linear,
     norm,
     has_ve,
     apply_rotary_emb,
@@ -42,9 +43,9 @@ class MLPSwiGLU(nn.Module):
         super().__init__()
         n_embd = config.n_embd
         self.hidden_size = _swiglu_hidden_size(n_embd)
-        self.gate = nn.Linear(n_embd, self.hidden_size, bias=False)
-        self.up = nn.Linear(n_embd, self.hidden_size, bias=False)
-        self.down = nn.Linear(self.hidden_size, n_embd, bias=False)
+        self.gate = Linear(n_embd, self.hidden_size, bias=False)
+        self.up = Linear(n_embd, self.hidden_size, bias=False)
+        self.down = Linear(self.hidden_size, n_embd, bias=False)
 
     def forward(self, x):
         gate_x = self.gate(x)
