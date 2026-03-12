@@ -6,3 +6,6 @@ __pycache__/
 
 # Local model cache (not for git)
 part2/nanochat-model/
+
+# OpenHermes dataset (download with OpenHermes.py; too large for git)
+openhermes_2.5.jsonl

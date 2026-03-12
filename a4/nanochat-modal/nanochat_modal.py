@@ -809,6 +809,102 @@ def stage_rl_task1(wandb_run: str = WANDB_RUN_TASK1_RL) -> None:
 
 
 # =============================================================================
+# A4 PART 2 — TASK 2: SFT + RL with extra dataset (OpenHermes-2.5)
+# =============================================================================
+# Prerequisite: download OpenHermes-2.5 and convert to JSONL (see chat instructions),
+# then put on volume, e.g.:
+#   modal volume put nanochat-vol ./openhermes_2.5.jsonl /vol/nanochat_cache/openhermes_2.5.jsonl
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_sft_task2(wandb_run: str = WANDB_RUN_TASK2_SFT) -> None:
+    """
+    A4 Part 2 Task 2 — SFT with original mixture + OpenHermes-2.5.
+
+    Same as Task 1 but adds OpenHermes-2.5 to the training mixture.
+    Expects openhermes_2.5.jsonl at NANOCHAT_CACHE (download + convert first, then
+    modal volume put nanochat-vol ./openhermes_2.5.jsonl /vol/nanochat_cache/openhermes_2.5.jsonl).
+
+    Run:
+        modal run nanochat_modal.py::stage_sft_task2
+    """
+    _setup_cache()
+
+    identity_dest = os.path.join(NANOCHAT_CACHE, "identity_conversations.jsonl")
+    print("Downloading identity conversations for SFT personality layer...")
+    _curl(IDENTITY_JSONL_URL, identity_dest)
+
+    openhermes_dest = os.path.join(NANOCHAT_CACHE, "openhermes_2.5.jsonl")
+    os.environ["OPENHERMES_JSONL"] = openhermes_dest
+
+    print(f"Running SFT (Task 2 — + OpenHermes-2.5) on {A4_MODEL_TAG} step {A4_MODEL_STEP}...")
+    _torchrun(
+        "scripts.chat_sft_swiglu_task2",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={A4_MODEL_TAG}",
+            f"--model-step={A4_MODEL_STEP}",
+            "--load-optimizer=0",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating SFT checkpoint on task benchmarks...")
+    _torchrun(
+        "scripts.chat_eval_swiglu",
+        ["-i", "sft", f"--model-tag={A4_MODEL_TAG}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("SFT Task 2 complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_rl_task2(wandb_run: str = WANDB_RUN_TASK2_RL) -> None:
+    """
+    A4 Part 2 Task 2 — RL (midtraining) after Task 2 SFT.
+
+    Loads the SFT checkpoint from stage_sft_task2 and runs GRPO on GSM8K.
+
+    Run:
+        modal run nanochat_modal.py::stage_rl_task2
+    """
+    _setup_cache()
+
+    print(f"Running RL Task 2 (GRPO on GSM8K) from SFT checkpoint {A4_MODEL_TAG}...")
+    _torchrun(
+        "scripts.chat_rl_swiglu",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={A4_MODEL_TAG}",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating RL checkpoint...")
+    _torchrun(
+        "scripts.chat_eval_swiglu",
+        ["-i", "rl", f"--model-tag={A4_MODEL_TAG}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("RL Task 2 complete.")
+
+
+# =============================================================================
 # FULL SPEEDRUN PIPELINE (main entrypoint)
 # =============================================================================
 
