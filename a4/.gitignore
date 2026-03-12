@@ -1,0 +1,8 @@
+# Runtime / environment
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# Local model cache (not for git)
+part2/nanochat-model/

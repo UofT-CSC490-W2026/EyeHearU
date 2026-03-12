@@ -50,5 +50,4 @@ Thumbs.db
 *.log
 *.tmp
 
-#a3
-nanochat/
+#a3 / a4 — each nanochat-modal/.gitignore handles its own nanochat/ exclusion

@@ -1,0 +1,33 @@
+# Upstream nanochat repo (clone: git clone https://github.com/karpathy/nanochat.git)
+# Ignore everything except our custom additions
+nanochat/*
+!nanochat/nanochat/
+nanochat/nanochat/*
+!nanochat/nanochat/gpt_swiglu.py
+!nanochat/nanochat/gpt_rmsnorm.py
+!nanochat/scripts/
+nanochat/scripts/*
+!nanochat/scripts/chat_sft_swiglu.py
+!nanochat/scripts/chat_rl_swiglu.py
+!nanochat/scripts/chat_eval_swiglu.py
+!nanochat/scripts/chat_cli_swiglu.py
+!nanochat/scripts/base_train_swiglu.py
+!nanochat/scripts/base_train_rmsnorm.py
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Modal
+.modal/
