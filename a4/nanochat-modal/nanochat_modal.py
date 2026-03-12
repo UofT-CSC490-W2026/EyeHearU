@@ -808,6 +808,33 @@ def stage_rl_task1(wandb_run: str = WANDB_RUN_TASK1_RL) -> None:
     print("RL Task 1 complete.")
 
 
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_eval_rl_task1() -> None:
+    """
+    Eval-only for the RL checkpoint (re-run if eval crashed).
+
+    Run:
+        modal run nanochat_modal.py::stage_eval_rl_task1
+    """
+    _setup_cache()
+
+    print("Evaluating RL checkpoint (eval-only)...")
+    _torchrun(
+        "scripts.chat_eval_swiglu",
+        ["-i", "rl", f"--model-tag={A4_MODEL_TAG}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("RL eval complete.")
+
+
 # =============================================================================
 # FULL SPEEDRUN PIPELINE (main entrypoint)
 # =============================================================================
