@@ -643,8 +643,8 @@ def stage_sft(wandb_run: str = WANDB_RUN) -> None:
         "scripts.chat_sft",
         [
             f"--run={wandb_run}",
-            "--model-step=4357",
-            "--model-tag=d20"
+            f"--model-tag=d{DEPTH}",
+            "--load-optimizer=0",
         ],
         nproc=_N_FINETUNE_GPUS,
     )
@@ -652,10 +652,11 @@ def stage_sft(wandb_run: str = WANDB_RUN) -> None:
     # speedrun.sh: torchrun ... -m scripts.chat_eval -- -i sft
     # -i sft tells chat_eval to load the SFT checkpoint (not base or rl)
     print("Evaluating SFT checkpoint on task benchmarks...")
-    _torchrun("scripts.chat_eval", 
+    _torchrun("scripts.chat_eval",
               [
                   "-i", "sft",
-               ], 
+                  f"--model-tag=d{DEPTH}",
+              ],
               nproc=_N_FINETUNE_GPUS)
 
     volume.commit()
@@ -702,18 +703,87 @@ def stage_rl(wandb_run: str = WANDB_RUN) -> None:
         "scripts.chat_rl",
         [
             f"--run={wandb_run}",
-            "--model-step=4357",
-            "--model-tag=d20"
+            f"--model-tag=d{DEPTH}",
         ],
         nproc=_N_FINETUNE_GPUS,
     )
 
     # speedrun.sh: torchrun ... -m scripts.chat_eval -- -i rl
     print("Evaluating RL checkpoint...")
-    _torchrun("scripts.chat_eval", ["-i", "rl"], nproc=_N_FINETUNE_GPUS)
+    _torchrun("scripts.chat_eval",
+              ["-i", "rl", f"--model-tag=d{DEPTH}"],
+              nproc=_N_FINETUNE_GPUS)
 
     volume.commit()
     print("RL complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_eval_rl() -> None:
+    """
+    Eval-only for the baseline d12 RL checkpoint (re-run if eval crashed).
+
+    Run:
+        modal run nanochat_modal.py::stage_eval_rl
+    """
+    _setup_cache()
+
+    print(f"Evaluating RL checkpoint (d{DEPTH}, eval-only)...")
+    _torchrun(
+        "scripts.chat_eval",
+        ["-i", "rl", f"--model-tag=d{DEPTH}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("RL eval complete.")
+
+
+# =============================================================================
+# A4 PART 3 — DETAILED GSM8K EVALUATION (per-problem results)
+# =============================================================================
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_gsm8k_detailed_eval() -> None:
+    """
+    Run detailed per-problem GSM8K evaluation on both SFT and RL checkpoints.
+    Saves JSON files with per-problem results for downstream analysis.
+
+    Run:
+        modal run nanochat_modal.py::stage_gsm8k_detailed_eval
+    """
+    _setup_cache()
+
+    model_tag = f"d{DEPTH}"
+
+    print(f"Running detailed GSM8K eval on SFT checkpoint ({model_tag})...")
+    _torchrun(
+        "scripts.gsm8k_detailed_eval",
+        ["--source=sft", f"--model-tag={model_tag}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print(f"Running detailed GSM8K eval on RL checkpoint ({model_tag})...")
+    _torchrun(
+        "scripts.gsm8k_detailed_eval",
+        ["--source=rl", f"--model-tag={model_tag}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("Detailed GSM8K eval complete. Files saved to report dir.")
 
 
 # =============================================================================
@@ -806,6 +876,33 @@ def stage_rl_task1(wandb_run: str = WANDB_RUN_TASK1_RL) -> None:
 
     volume.commit()
     print("RL Task 1 complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_eval_rl_task1() -> None:
+    """
+    Eval-only for the RL checkpoint (re-run if eval crashed).
+
+    Run:
+        modal run nanochat_modal.py::stage_eval_rl_task1
+    """
+    _setup_cache()
+
+    print("Evaluating RL checkpoint (eval-only)...")
+    _torchrun(
+        "scripts.chat_eval_swiglu",
+        ["-i", "rl", f"--model-tag={A4_MODEL_TAG}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("RL eval complete.")
 
 
 # =============================================================================
