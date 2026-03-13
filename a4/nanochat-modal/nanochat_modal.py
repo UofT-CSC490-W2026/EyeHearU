@@ -35,7 +35,7 @@ import modal
 from modal import App, Image as ModalImage, Volume, Secret
 
 # ── A4 config (mirrored from ../nanochat_chat_model_a4.py) ───────────────────
-A4_MODEL_TAG        = "d12_swiglu"
+A4_MODEL_TAG        = "d12"
 A4_MODEL_STEP       = "2205"
 WANDB_RUN_TASK1_SFT = "a4_task1_sft"
 WANDB_RUN_TASK1_RL  = "a4_task1_rl"
@@ -83,7 +83,7 @@ DEVICE_BATCH_SIZE = 16    # d24 at 16 is safe; 32 may OOM on some H100 configs
 # Set to "dummy" to disable WandB logging
 # WANDB_RUN = "dummy"
 # WANDB_RUN = "picochat_baseline"
-WANDB_RUN = "picochat_swiglu"
+WANDB_RUN = "a4_baseline_rl_d12"
 
 # ── Volume mount path ──────────────────────────────────────────────────────────
 # All cached data (shards, tokenizer, checkpoints, eval bundle) lives here
@@ -995,7 +995,7 @@ def stage_sft_task1(wandb_run: str = WANDB_RUN_TASK1_SFT) -> None:
     """
     A4 Part 2 Task 1 — SFT with original nanochat configuration.
 
-    Loads the a3 pretrained d12_swiglu checkpoint and runs SFT using the
+    Loads the a3 pretrained d12 baseline checkpoint and runs SFT using the
     default data mixture (SmolTalk, MMLU, GSM8K, SpellingBee, identity).
     Logs to W&B and evaluates on all ChatCORE tasks afterwards.
 
@@ -1010,7 +1010,7 @@ def stage_sft_task1(wandb_run: str = WANDB_RUN_TASK1_SFT) -> None:
 
     print(f"Running SFT (Task 1 — original config) on {A4_MODEL_TAG} step {A4_MODEL_STEP}...")
     _torchrun(
-        "scripts.chat_sft_swiglu",
+        "scripts.chat_sft",
         [
             f"--run={wandb_run}",
             f"--model-tag={A4_MODEL_TAG}",
@@ -1022,7 +1022,7 @@ def stage_sft_task1(wandb_run: str = WANDB_RUN_TASK1_SFT) -> None:
 
     print("Evaluating SFT checkpoint on task benchmarks...")
     _torchrun(
-        "scripts.chat_eval_swiglu",
+        "scripts.chat_eval",
         ["-i", "sft", f"--model-tag={A4_MODEL_TAG}"],
         nproc=_N_FINETUNE_GPUS,
     )
@@ -1040,10 +1040,10 @@ def stage_sft_task1(wandb_run: str = WANDB_RUN_TASK1_SFT) -> None:
 )
 def stage_rl_task1(wandb_run: str = WANDB_RUN_TASK1_RL) -> None:
     """
-    A4 Part 2 Task 1 — RL (midtraining) with original nanochat configuration.
+    A4 Part 2 Task 1 — RL with original nanochat configuration.
 
     Loads the SFT checkpoint produced by stage_sft_task1 and runs GRPO on
-    GSM8K using chat_rl.py default hyperparameters.  Does NOT pass
+    GSM8K using chat_rl.py default hyperparameters. Does NOT pass
     --model-step so that the latest SFT checkpoint is auto-detected.
 
     Run:
@@ -1053,7 +1053,7 @@ def stage_rl_task1(wandb_run: str = WANDB_RUN_TASK1_RL) -> None:
 
     print(f"Running RL Task 1 (GRPO on GSM8K) from SFT checkpoint {A4_MODEL_TAG}...")
     _torchrun(
-        "scripts.chat_rl_swiglu",
+        "scripts.chat_rl",
         [
             f"--run={wandb_run}",
             f"--model-tag={A4_MODEL_TAG}",
@@ -1063,7 +1063,7 @@ def stage_rl_task1(wandb_run: str = WANDB_RUN_TASK1_RL) -> None:
 
     print("Evaluating RL checkpoint...")
     _torchrun(
-        "scripts.chat_eval_swiglu",
+        "scripts.chat_eval",
         ["-i", "rl", f"--model-tag={A4_MODEL_TAG}"],
         nproc=_N_FINETUNE_GPUS,
     )
@@ -1090,13 +1090,73 @@ def stage_eval_rl_task1() -> None:
 
     print("Evaluating RL checkpoint (eval-only)...")
     _torchrun(
-        "scripts.chat_eval_swiglu",
+        "scripts.chat_eval",
         ["-i", "rl", f"--model-tag={A4_MODEL_TAG}"],
         nproc=_N_FINETUNE_GPUS,
     )
 
     volume.commit()
     print("RL eval complete.")
+
+
+# =============================================================================
+# A4 PART 2 — TASK 2: SFT with extra dataset (OpenHermes-2.5), standard d12
+# =============================================================================
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_sft_task2(wandb_run: str = WANDB_RUN_TASK2_SFT) -> None:
+    """
+    A4 Part 2 Task 2 — SFT with original mixture + OpenHermes-2.5.
+
+    Uses the standard d12 model (no SwiGLU), same as stage_sft Task 1.
+    Downloads and converts OpenHermes-2.5 automatically if not cached.
+
+    Run:
+        modal run nanochat_modal.py::stage_sft_task2
+    """
+    _setup_cache()
+
+    identity_dest = os.path.join(NANOCHAT_CACHE, "identity_conversations.jsonl")
+    print("Downloading identity conversations for SFT personality layer...")
+    _curl(IDENTITY_JSONL_URL, identity_dest)
+
+    openhermes_dest = os.path.join(NANOCHAT_CACHE, "openhermes_2.5.jsonl")
+    if not os.path.exists(openhermes_dest):
+        print("OpenHermes-2.5 JSONL not found on volume — downloading and converting...")
+        _python("scripts.convert_openhermes", [openhermes_dest])
+        volume.commit()
+        print("OpenHermes-2.5 JSONL created and committed to volume.")
+    else:
+        print(f"OpenHermes-2.5 JSONL found at {openhermes_dest}, skipping download.")
+
+    model_tag = f"d{DEPTH}"
+    print(f"Running SFT Task 2 (original + OpenHermes-2.5) on {model_tag}...")
+    _torchrun(
+        "scripts.chat_sft",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={model_tag}",
+            "--load-optimizer=0",
+            f"--extra-jsonl={openhermes_dest}",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating SFT Task 2 checkpoint on task benchmarks...")
+    _torchrun(
+        "scripts.chat_eval",
+        ["-i", "sft", f"--model-tag={model_tag}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("SFT Task 2 complete.")
 
 
 # =============================================================================

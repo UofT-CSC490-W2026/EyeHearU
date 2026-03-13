@@ -66,6 +66,7 @@ parser.add_argument("--chatcore-max-sample", type=int, default=24, help="max pro
 # Data mixture
 parser.add_argument("--mmlu-epochs", type=int, default=3, help="number of epochs of MMLU in training mixture (teaches Multiple Choice)")
 parser.add_argument("--gsm8k-epochs", type=int, default=4, help="number of epochs of GSM8K in training mixture (teaches Math and Tool Use)")
+parser.add_argument("--extra-jsonl", type=str, action="append", default=[], help="extra JSONL files to add to training mixture (can be repeated)")
 args = parser.parse_args()
 user_config = vars(args).copy()
 # -----------------------------------------------------------------------------
@@ -171,6 +172,12 @@ train_tasks = [
     SimpleSpelling(size=200000, split="train"), # 200K rows of Simple Spelling (e.g. spell the word 'apple')
     SpellingBee(size=80000, split="train"), # 80K rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
 ]
+for extra_path in args.extra_jsonl:
+    if os.path.exists(extra_path):
+        train_tasks.append(CustomJSON(filepath=extra_path))
+        print0(f"Added extra JSONL dataset: {extra_path}")
+    else:
+        print0(f"WARNING: extra JSONL file not found: {extra_path}")
 train_dataset = TaskMixture(train_tasks)
 print0(f"Training mixture: {len(train_dataset):,} rows (MMLU x{args.mmlu_epochs}, GSM8K x{args.gsm8k_epochs})")
 val_dataset = TaskMixture([

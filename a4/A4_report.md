@@ -4,28 +4,28 @@
 
 | Name | Student ID |
 |------|------------|
-| TODO | TODO |
-| TODO | TODO |
-| TODO | TODO |
+| Maria Ma | 1009054924 |
+| Zhixiao Fu | 1009834342 |
+| Siyi Zhu | 1008793076 |
+| Chloe Yang | 1009261433 |
 
 ---
 
 ## 1. Part One: GRPO and RL Review (10 marks)
 
-<!-- TODO: Write a short paragraph comparing nanochat's RL implementation to standard GRPO -->
+Karpathy keeps only the core idea of GRPO: for each question, sample a group of responses, compute their rewards, and use a group-relative baseline by subtracting the group mean reward. That part matches the original GRPO paper (Shao et al., 2024), where the advantage is defined from rewards within the sampled group for the same prompt. But beyond that, his implementation is substantially simpler than the paper's formulation. In the original GRPO, the objective still includes reference-model KL regularization, uses a clipped surrogate objective, and normalizes rewards as a z-score by dividing by the group standard deviation, i.e. ((r−μ)/σ). Karpathy removes all three: no KL term, no clipping term, and no division by standard deviation; his advantage is just (r−μ). He also uses a token-level formulation in the loss, multiplying each token log-probability by the same sample-level advantage and normalizing over valid tokens, whereas the original outcome-supervision GRPO description assigns the normalized reward to all tokens of the sequence in a more sequence-oriented formulation.
 
-[TODO — Placeholder]
-
-Compare nanochat's RL implementation (`scripts/chat_rl.py`) to the standard GRPO formulation from Shao et al. (2024). Key differences to discuss:
-
-- How nanochat samples and scores completions within a group
-- Advantage computation (group-relative vs. baseline-subtracted)
-- KL penalty handling
-- Why Karpathy may have simplified or diverged from the paper
+The reason for these changes is likely that he is optimizing for a minimal, stable, easy-to-understand on-policy training loop for GSM8K, not for reproducing the full paper recipe. Since he samples fresh rollouts and updates immediately, he likely judged the paper's extra stabilization machinery unnecessary overhead in this setting. Removing KL avoids maintaining a reference policy and avoids constraining exploration; removing z-score scaling avoids instability when the within-group standard deviation is very small; and using (r−μ) keeps the estimator simple while preserving the relative ranking signal that is the main point of GRPO. So his version is best understood as "group-relative REINFORCE" inspired by GRPO, rather than a faithful implementation of the original GRPO objective.
 
 ---
 
 ## 2. Part Two: SFT & Midtraining (20 marks)
+
+### Note on Midtraining
+
+Karpathy removed the separate `mid_train.py` script from nanochat on January 31, 2025 (commit `1ddaad1`). However, the midtraining *data* was not removed — all task datasets (MMLU, GSM8K, SpellingBee, SimpleSpelling) were folded into `chat_sft.py` as part of a single unified training mixture. Before this change, nanochat had two post-pretraining stages (Pretrain → Midtrain → SFT); after, it has one (Pretrain → SFT, with the SFT mixture containing everything that was previously in midtraining). The professor confirmed that either the new or original scripts are acceptable, noting: *"Just checked, yes he did — you can use either the new chatSFT or the original scripts, just note which version."*
+
+We use the **current (post-January 2025) version** of nanochat's `chat_sft.py`, which means our SFT stage effectively includes all the data that Karpathy's original midtraining covered (SmolTalk conversations, MMLU multiple-choice, GSM8K tool-use examples, SpellingBee). This is functionally equivalent to running both midtraining and SFT, but consolidated into a single training stage.
 
 ### 2.1 Original Configuration SFT (Bullet 1)
 
@@ -33,7 +33,15 @@ We ran the nanochat SFT script on our pretrained **baseline `d12`** model (step 
 
 #### Model Choice Justification
 
-The baseline d12 GPT architecture matches Karpathy's original nanochat configuration. This ensures our SFT and RL results (Part 3) are directly comparable to the reference run without confounding architectural differences. Both d12 variants (baseline vs. SwiGLU) achieved similar pretraining quality (Val BPB 0.8899 baseline vs. 0.9064 SwiGLU, CORE 0.1186 vs. 0.1334).
+The assignment states: *"Given your pretrained model run the SFT and midtraining scripts using the original configuration."* We chose the **baseline GPT d12** architecture (rather than the SwiGLU variant from A3) for three reasons:
+
+1. **Direct comparability to Karpathy's reference run.** Part 3 asks us to *"replicate the run in github where Karpathy trains the model on GSM8k."* Karpathy's original nanochat uses the standard GPT architecture, so using the same architecture ensures our results are directly comparable without confounding variables from architectural differences.
+
+2. **No monkey-patching complexity.** The SwiGLU variant requires custom wrapper scripts (`chat_sft_swiglu.py`, `chat_rl_swiglu.py`, etc.) that monkey-patch the model class at import time. Using the baseline architecture lets us use the upstream nanochat scripts directly, reducing the risk of subtle bugs.
+
+3. **Similar pretraining quality.** Both d12 variants achieved comparable pretraining quality (Val BPB 0.8899 baseline vs. 0.9064 SwiGLU, CORE 0.1186 vs. 0.1334), so this choice does not sacrifice meaningful model capability.
+
+The professor confirmed that any variant or baseline is acceptable as long as the choice is justified.
 
 #### Pretraining Configuration
 
@@ -99,12 +107,20 @@ Categorical benchmarks assume ~25% random-guess baselines for 4-choice tasks (AR
 
 **Key takeaway:** SFT converts a raw pretrained model into a functional chat model. The largest gains come from format learning (multiple choice, tool use, spelling) rather than deep reasoning. Tasks like GSM8K that require multi-step reasoning show only modest gains from SFT alone — further improvement requires RL (Part 3).
 
+#### W&B Training Curves
+
+Full W&B run: [a4_sft_d12](https://wandb.ai/maria-shurui-ma-university-of-toronto/nanochat-sft?nw=nwusermariashuruima).
+
+![SFT W&B Training Curves: chatcore_cat, chatcore_metric, step, total_training_flops, total_training_time](part2/plots/wandb_sft_curves.png)
+
+The SFT run completed 969 steps in ~240 seconds (~4 minutes) on 4x H100. The `chatcore_metric` (evaluated periodically during training) starts at ~0.214 and rises to ~0.225 by step ~100 (the final post-training evaluation yields 0.2375, slightly higher than the interim checks due to more thorough evaluation). The `chatcore_cat` (categorical benchmark accuracy) climbs steadily from ~0.08 to ~0.11, reflecting improving multiple-choice performance throughout training.
+
 #### Data Sources
 
 | Data point | Source |
 |------------|--------|
 | Pretrain metrics | Modal `stage_pretrain` report |
-| SFT training metrics | Modal `stage_sft` report |
+| SFT training metrics | Modal `stage_sft` report + [W&B](https://wandb.ai/maria-shurui-ma-university-of-toronto/nanochat-sft?nw=nwusermariashuruima) |
 | SFT benchmark accuracy | `chat_eval -i sft --model-tag=d12` output |
 | Pretrained benchmark baselines | Theoretical random-guess values |
 
@@ -125,6 +141,18 @@ Categorical benchmarks assume ~25% random-guess baselines for 4-choice tasks (AR
 ### 3.1 RL Training Replication
 
 We replicated Karpathy's RL run using the simplified GRPO implementation in `scripts/chat_rl.py`, training our d12 baseline model on the GSM8K training set.
+
+#### Starting Checkpoint Justification
+
+The assignment asks us to *"replicate the run in github where Karpathy trains the model on GSM8k."* Karpathy's original pipeline was Pretrain → Midtrain → SFT → RL, with RL starting from the SFT checkpoint (not the base pretrained model). As noted in Section 2, Karpathy consolidated midtraining into SFT in January 2025, so the current pipeline is **Pretrain → SFT → RL**. We follow this structure, starting RL from our SFT checkpoint (d12, step 969). Our SFT stage already includes all the data that was previously in midtraining (MMLU, GSM8K, SpellingBee, SmolTalk), so nothing is omitted.
+
+Starting from the SFT checkpoint rather than the base pretrained model is critical because:
+
+1. **The RL script assumes chat format.** `chat_rl.py` generates completions using `tokenizer.render_for_completion()`, which requires the model to understand chat tokens (`<|assistant_start|>`, `<|python_start|>`, etc.). A base pretrained model has never seen these tokens and would produce incoherent output, making RL training ineffective.
+
+2. **SFT teaches tool use.** GSM8K problems require calculator tool calls. Without SFT exposure to tool-use examples, the model cannot produce the `<< expr >>` patterns that the GSM8K reward function evaluates.
+
+3. **Matches Karpathy's pipeline.** The professor confirmed that either starting point is acceptable with justification. We chose SFT → RL to faithfully replicate the reference pipeline.
 
 #### RL Training Configuration
 
@@ -163,7 +191,7 @@ We replicated Karpathy's RL run using the simplified GRPO implementation in `scr
 
 #### Reward and Eval Curves
 
-The following W&B plots show training dynamics over ~467 RL steps. The run name "picochat_swiglu" is a W&B configuration artifact — this is the baseline d12 model trained with the standard GRPO pipeline described above.
+The following W&B plots show training dynamics over ~467 RL steps for the baseline d12 model (run name `a4_baseline_rl_d12`). Full W&B run: [a4_baseline_rl_d12](https://wandb.ai/maria-shurui-ma-university-of-toronto/nanochat-rl/runs/dxy9w9da).
 
 ![W&B Training Curves: LR multiplier, pass@1 through pass@5](part3/plots/wandb_curves_1.png)
 
@@ -177,27 +205,38 @@ The following W&B plots show training dynamics over ~467 RL steps. The run name 
 - **Learning rate multiplier** decays linearly from 1.0 to ~0.15 over training, confirming the linear rampdown schedule.
 - **Sequence length** fluctuates between 120–220 tokens with no clear trend, indicating the model doesn't learn to generate significantly longer or shorter responses over RL training.
 
-#### Comparison to Karpathy's Original Run
+#### Comparison to Karpathy's Original Run (d20 Speedrun)
 
-| | Karpathy (d32, ~1.9B params) | Our run (d12, ~286M params) |
+We compare against Karpathy's d20 speedrun results as reported in the [nanochat Discussion #1](https://github.com/karpathy/nanochat/discussions/1).
+
+| | Karpathy d20 speedrun (~560M params) | Our run (d12, ~286M params) |
 |---|---|---|
-| Architecture | GPT baseline (32 layers, 2048 dim) | GPT baseline (12 layers, 768 dim) |
-| Parameters | ~1.9B | ~286M |
-| Pretraining data | 800 shards (~37.6B tokens) | 8 shards (~1.2B tokens) |
-| Pipeline | Pretrain → Midtrain → SFT → RL | Pretrain → SFT → RL |
-| GSM8K after SFT | 12.74%† | 3.56% |
-| GSM8K after RL | 19.94% | 10.92% |
-| RL improvement | +7.20% | +7.36% |
+| Architecture | GPT baseline (20 layers, 1280 dim) | GPT baseline (12 layers, 768 dim) |
+| Parameters | ~560M | ~286M |
+| Pretraining data | 240 shards (~11.2B tokens) | 8 shards (~1.2B tokens) |
+| Pipeline | Pretrain → Midtrain → SFT → RL | Pretrain → SFT (consolidated) → RL |
+| CORE (base pretrained) | 0.2219 | 0.1186 |
+| GSM8K after SFT | 4.55% | 3.56% |
+| GSM8K after RL | 7.58% | 10.92% |
+| RL improvement | +3.03% | +7.36% |
 
-*†Karpathy's SFT checkpoint includes a separate midtraining step before SFT; our pipeline omits midtraining.*
+*Source: Karpathy's [nanochat Discussion #1](https://github.com/karpathy/nanochat/discussions/1) report card. See screenshot in [part3/plots/karpathy_report_card.png](part3/plots/karpathy_report_card.png). Note that Karpathy's pipeline used the original two-stage midtrain + SFT sequence, while ours uses the post-January 2025 consolidated SFT that includes midtraining data. Karpathy only evaluated the RL checkpoint on GSM8K (using `-a GSM8K`), so no post-RL numbers are available for his other benchmarks.*
+
+#### Karpathy's Reward and Eval Curves
+
+The following screenshot shows Karpathy's W&B training curves for the d20 speedrun RL stage (labeled `d20speed`), from [Discussion #1](https://github.com/karpathy/nanochat/discussions/1):
+
+![Karpathy's d20speed RL Curves: reward, pass@1, pass@8](part3/plots/karpathy_wandb_curves.png)
+
+Karpathy's reward trends upward from ~0.02 to ~0.05 over ~467 steps, with high variance. Pass@1 climbs from ~0.03 to ~0.06 (consistent with his final eval of 7.58%). Pass@8 rises from ~0.15 to ~0.21 over ~90 minutes of training.
 
 **Key observations:**
 
-1. **The RL improvement is remarkably similar** despite very different model scales. Karpathy's d32 gained +7.20% from RL; our d12 gained +7.36%. This suggests the GRPO algorithm extracts a roughly constant amount of improvement from the GSM8K reward signal, regardless of starting accuracy. The ceiling is higher for larger models because they start higher after SFT.
+1. **Our d12 model achieves higher GSM8K accuracy after RL** than Karpathy's d20 (10.92% vs. 7.58%), despite being ~2x smaller and pretrained on ~9.7x less data. The most likely explanation is that the nanochat codebase has evolved since Karpathy's original run — the current version of `chat_sft.py` consolidates midtraining data into a single SFT stage, which may provide a more effective starting point for RL. Additionally, the RL training loop and hyperparameters may have been refined in subsequent commits.
 
-2. **Our GSM8K accuracy (10.92%) is lower than Karpathy's (19.94%)** primarily because our model is ~7× smaller (286M vs. ~1.9B parameters) and was pretrained on ~30× less data (~1.2B vs. ~37.6B tokens). Additionally, Karpathy's pipeline included a separate midtraining step before SFT that we omitted. Smaller models have less capacity for multi-step reasoning, consistent with known scaling laws.
+2. **Our RL improvement (+7.36%) is substantially larger than Karpathy's (+3.03%).** Our lower SFT baseline (3.56% vs. 4.55%) may leave more room for RL to discover correct solution strategies. The denser reward signal from a lower-performing starting point means more completions produce non-zero advantage, which can accelerate learning in the simplified REINFORCE-style loop. Additionally, the consolidated SFT stage may produce a checkpoint that is better adapted for RL hill-climbing on GSM8K.
 
-3. **Catastrophic forgetting is severe.** SpellingBee collapsed from 99.22% to 2.73%, and HumanEval dropped from 6.71% to 0.00%. This is a direct consequence of the simplified GRPO formulation: because there is no KL divergence penalty against the SFT reference model, the RL optimization is free to drift arbitrarily far from the SFT policy. The model "forgets" non-GSM8K skills because there is no regularization incentivizing their preservation. Standard GRPO includes a KL penalty term precisely to prevent this.
+3. **Catastrophic forgetting is severe.** SpellingBee collapsed from 99.22% to 2.73%, and HumanEval dropped from 6.71% to 0.00%. This is a direct consequence of the simplified GRPO formulation: because there is no KL divergence penalty against the SFT reference model, the RL optimization is free to drift arbitrarily far from the SFT policy. The model "forgets" non-GSM8K skills because there is no regularization incentivizing their preservation. Standard GRPO includes a KL penalty term precisely to prevent this. Karpathy only evaluated RL on GSM8K (using `-a GSM8K`), so we cannot directly compare forgetting behavior between the two runs.
 
 4. **Categorical benchmarks (ARC, MMLU) were relatively stable** (within ~2%), likely because the multiple-choice format is robust and these benchmarks rely more on factual knowledge encoded in the model weights than on the generation format that RL disrupts.
 
@@ -382,6 +421,6 @@ In summary, richer GSM8K reward environments at this model scale **do not buy la
 
 ## References
 
-- Karpathy, A. (2025). nanochat: A tiny chatbot arena and training harness. https://github.com/karpathy/nanochat/discussions/481
+- Karpathy, A. (2025). nanochat: A tiny chatbot arena and training harness. https://github.com/karpathy/nanochat/discussions/1
 - Shao, Z., Wang, P., Zhu, Q., et al. (2024). GRPO: Group Relative Policy Optimization for Language Model Alignment. arXiv preprint arXiv:2402.05191.
 - Cobbe, K., Kosaraju, V., Bavarian, M., et al. (2021). Training Verifiers to Solve Math Word Problems. arXiv preprint arXiv:2110.14168.
