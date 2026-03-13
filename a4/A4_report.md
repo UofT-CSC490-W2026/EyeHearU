@@ -193,6 +193,9 @@ Starting from the SFT checkpoint rather than the base pretrained model is critic
 
 The following W&B plots show training dynamics over ~467 RL steps for the baseline d12 model (run name `a4_baseline_rl_d12`). Full W&B run: [a4_baseline_rl_d12](https://wandb.ai/maria-shurui-ma-university-of-toronto/nanochat-rl/runs/dxy9w9da).
 
+![W&B Training Curves: LR multiplier, pass@1 through pass@5](part3/plots/wandb_curves_1.png)
+
+![W&B Training Curves: pass@6 through pass@8, reward, sequence length](part3/plots/wandb_curves_2.png)
 
 **Key observations from the curves:**
 
@@ -358,7 +361,18 @@ Part 3 showed that on GSM8K the RL model still made many **wrong arithmetic** er
 - **Steps reward**: encourages a moderate number of calculator calls by peaking at 2 tool calls and decaying as we move away from that count, mirroring Part 3’s finding that accuracy is highest at 1–2 steps and worse for 0 or many steps.
 - **Close‑arithmetic reward**: assigns partial credit when the predicted answer is numerically close to the ground truth (e.g., small relative error), so that “almost right” arithmetic receives a stronger learning signal than obviously wrong answers.
 
-We treat the original **0/1 correctness reward** as our baseline environment and use these three components to define additional RL environments, all trained with the same GRPO configuration as Part 3 and evaluated only on GSM8K.
+The total reward is a weighted sum: $r_{\text{total}} = w_{\text{correct}} \cdot r_{\text{correct}} + w_{\text{format}} \cdot r_{\text{format}} + w_{\text{steps}} \cdot r_{\text{steps}} + w_{\text{close}} \cdot r_{\text{close}}$
+
+We treat the original **0/1 correctness reward** as our baseline environment and use these three components to define additional RL environments with the following weight configurations:
+
+| Run | w_correct | w_format | w_steps | w_close |
+|-----|-----------|----------|---------|---------|
+| Baseline RL (Run #1) | 1.0 | 0.0 | 0.0 | 0.0 |
+| Combined RL (Run #2) | 1.0 | 0.2 | 0.2 | 0.3 |
+| Format RL (Run #3) | 1.0 | 0.2 | 0.0 | 0.0 |
+| Close RL (Run #4) | 1.0 | 0.0 | 0.0 | 0.3 |
+
+All runs use the same GRPO configuration as Part 3 (starting from the SFT checkpoint, same optimizer, LR schedule, and batch size) and are evaluated on GSM8K.
 
 ### 4.2 Combined Reward Training (Run #2)
 
@@ -366,10 +380,22 @@ Our first experiment activates all reward components simultaneously (correctness
 
 | Run / Model | Reward configuration | GSM8K accuracy |
 |-------------|----------------------|----------------|
-| Baseline RL (Run #1) | correctness only | **10.9%** |
-| Format RL | format only | **7.4%** |
-| Close RL | close‑arithmetic only | **10.9%** |
-| Combined RL (Run #2) | correctness + format + steps + close | **10.2%** |
+| Baseline RL (Run #1) | correctness only | **10.92%** |
+| Combined RL (Run #2) | correctness + format + steps + close | **10.24%** |
+| Format RL (Run #3) | correctness + format | **7.35%** |
+| Close RL (Run #4) | correctness + close | **10.92%** |
+
+W&B run links:
+- [Baseline RL](https://wandb.ai/maria-shurui-ma-university-of-toronto/nanochat-rl/runs/dxy9w9da)
+- [Combined rewards](https://wandb.ai/maria-shurui-ma-university-of-toronto/nanochat-rl/runs/39bpojy5)
+- [Format-only](https://wandb.ai/maria-shurui-ma-university-of-toronto/nanochat-rl/runs/od6w8bpj)
+- [Close-only](https://wandb.ai/maria-shurui-ma-university-of-toronto/nanochat-rl/runs/lrmznj2u)
+
+#### W&B Training Curves (All Part 4 Configurations)
+
+![Part 4 W&B Curves: reward, pass@1, pass@5](part4/plots/wandb_curves_all_1.png)
+
+![Part 4 W&B Curves: pass@6-8, sequence length, LR multiplier](part4/plots/wandb_curves_all_2.png)
 
 ![GSM8K Accuracy Across RL Reward Configurations](part4/plots/gsm8k_comparison.png)
 ![by domain](part4/plots/domain_by_config.png)
@@ -385,7 +411,7 @@ To understand the impact of each new reward, we also trained two single‑compon
 
 Across all math slices the **Format RL environment performs the worst**. In `part4/plots/domain_by_config.png` it is below baseline and combined RL for every domain, especially money/shopping and people/age. `part4/plots/magnitude_by_config.png` shows lower accuracy across all answer magnitudes, and `part4/plots/operations_by_config.png` reveals clear degradation on multiplication, addition, subtraction, and division. Even at the favorable 1–2 reasoning steps in `part4/plots/steps_by_config.png`, Format RL lags the other runs by several percentage points. This indicates that the model has largely learned to emit well‑formatted `#### <number>` answers without actually improving its math.
 
-In contrast, **Close RL matches the baseline’s 10.9% GSM8K accuracy** while reshaping which individual problems are solved. It often slightly outperforms baseline on specific domains (e.g., food/cooking, people/age, distance/travel) and on some magnitude buckets, without harming performance on any operation type. The per‑problem difference plot below makes this concrete: most problems stay the same, but a noticeable band of green points show cases where Close RL fixes a baseline error, balanced by a smaller number of red regressions.
+In contrast, **Close RL matches the baseline’s 10.92% GSM8K accuracy** while reshaping which individual problems are solved. It often slightly outperforms baseline on specific domains (e.g., food/cooking, people/age, distance/travel) and on some magnitude buckets, without harming performance on any operation type. The per‑problem difference plot below makes this concrete: most problems stay the same, but a noticeable band of green points show cases where Close RL fixes a baseline error, balanced by a smaller number of red regressions.
 
 ![Per‑problem change vs baseline RL (close‑only)](part4/plots/per_problem_diff.png)
 
@@ -407,10 +433,10 @@ Focusing on GSM8K and treating Part 3’s baseline RL as Run #1, our reward envi
 
 | Run | Reward environment | GSM8K accuracy | Qualitative impact on GSM8K behaviour |
 |-----|--------------------|----------------|----------------------------------------|
-| 1. Baseline RL | correctness only | **10.9%** | Strongest exact accuracy; good formatting and tool use, but most errors are wrong arithmetic on 1–2‑step problems. |
-| 2. Combined RL | correctness + format + steps + close | **10.2%** | Slight accuracy drop but fewer format errors and more close‑arithmetic near‑misses; preserves the same domain/magnitude/operation profile as baseline. |
-| 3. Format RL | format only | **7.4%** | Clearly harmful: underperforms in every domain, magnitude bin, and operation; mainly teaches the model to print `#### <number>` without solving the math. |
-| 4. Close RL | close‑arithmetic only | **10.9%** | Matches baseline accuracy while changing which problems are solved; increases the share of numerically reasonable mistakes and slightly boosts some domains and operations. |
+| 1. Baseline RL | correctness only | **10.92%** | Strongest exact accuracy; good formatting and tool use, but most errors are wrong arithmetic on 1–2‑step problems. |
+| 2. Combined RL | correctness + format + steps + close | **10.24%** | Slight accuracy drop but fewer format errors and more close‑arithmetic near‑misses; preserves the same domain/magnitude/operation profile as baseline. |
+| 3. Format RL | correctness + format | **7.35%** | Clearly harmful: underperforms in every domain, magnitude bin, and operation; mainly teaches the model to print `#### <number>` without solving the math. |
+| 4. Close RL | correctness + close | **10.92%** | Matches baseline accuracy while changing which problems are solved; increases the share of numerically reasonable mistakes and slightly boosts some domains and operations. |
 
 In summary, richer GSM8K reward environments at this model scale **do not buy large headline accuracy gains**, but they provide insight into how reward shaping interacts with math reasoning. A naive format‑only reward hurts performance, while a carefully tuned close‑arithmetic reward retains baseline GSM8K accuracy and nudges the model toward more sensible arithmetic behaviour. For future GSM8K‑focused RL, the most promising direction is to pair the original correctness signal with a close‑arithmetic component, and to explore more semantically informed math rewards rather than purely syntactic ones.
 

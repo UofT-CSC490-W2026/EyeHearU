@@ -1136,12 +1136,14 @@ def stage_sft_task2(wandb_run: str = WANDB_RUN_TASK2_SFT) -> None:
         print(f"OpenHermes-2.5 JSONL found at {openhermes_dest}, skipping download.")
 
     model_tag = f"d{DEPTH}"
-    print(f"Running SFT Task 2 (original + OpenHermes-2.5) on {model_tag}...")
+    save_tag = f"d{DEPTH}_openhermes"
+    print(f"Running SFT Task 2 (original + OpenHermes-2.5) on {model_tag}, saving to {save_tag}...")
     _torchrun(
         "scripts.chat_sft",
         [
             f"--run={wandb_run}",
             f"--model-tag={model_tag}",
+            f"--save-tag={save_tag}",
             "--load-optimizer=0",
             f"--extra-jsonl={openhermes_dest}",
         ],
@@ -1151,7 +1153,7 @@ def stage_sft_task2(wandb_run: str = WANDB_RUN_TASK2_SFT) -> None:
     print("Evaluating SFT Task 2 checkpoint on task benchmarks...")
     _torchrun(
         "scripts.chat_eval",
-        ["-i", "sft", f"--model-tag={model_tag}"],
+        ["-i", "sft", f"--model-tag={save_tag}"],
         nproc=_N_FINETUNE_GPUS,
     )
 
