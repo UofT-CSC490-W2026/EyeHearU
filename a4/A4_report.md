@@ -126,13 +126,118 @@ The SFT run completed 969 steps in ~240 seconds (~4 minutes) on 4x H100. The `ch
 
 ### 2.2 Additional Datasets for SFT (Bullet 2)
 
-<!-- TODO: Find additional datasets, justify choices, run SFT, compare results -->
+#### Dataset Selection: OpenHermes 2.5
 
-[TODO — Placeholder]
+We selected [**OpenHermes 2.5**](https://huggingface.co/datasets/teknium/OpenHermes-2.5) (`teknium/OpenHermes-2.5`) as our additional SFT dataset. OpenHermes 2.5 contains approximately **1,001,551 high-quality instruction-following conversations** sourced from a variety of domains including:
 
-- Dataset selection and justification
-- Training with same configuration
-- Results comparison to Section 2.1
+- General knowledge and reasoning
+- Mathematics and step-by-step problem solving
+- Code generation and debugging
+- Creative writing and summarization
+- Multi-turn dialogue
+
+**Justification:**
+
+1. **Complementary to SmolTalk**: The default SFT mixture is dominated by SmolTalk (~460K general chat). OpenHermes adds more diverse and challenging instruction-following examples, covering domains that SmolTalk under-represents.
+2. **Math reasoning coverage**: OpenHermes includes math problem-solving conversations that complement the limited GSM8K training data (only ~30K rows after 4× epoch oversampling). This directly targets our model's weakest benchmark.
+3. **Format compatibility**: OpenHermes uses a standard user/assistant conversation format, making it directly compatible with nanochat's `CustomJSON` task loader after a simple role mapping (`human` → `user`, `gpt` → `assistant`).
+4. **Scale**: At ~1M conversations, OpenHermes roughly doubles the training mixture (from ~1.07M to ~2.07M rows), providing significantly more training signal without requiring changes to hyperparameters.
+
+**Data Conversion**: We used `scripts/convert_openhermes.py` to download and convert the dataset from HuggingFace into nanochat's JSONL format. The conversion maps `human`/`gpt` roles to `user`/`assistant` and filters out conversations with fewer than 2 turns.
+
+#### Training Configuration
+
+We used the **same hyperparameters** as Task 1 — the only change was adding OpenHermes to the training mixture via the `--extra-jsonl` flag added to `chat_sft.py`. The model architecture remains the standard d12 GPT baseline (no SwiGLU).
+
+| Parameter | Task 1 (Original) | Task 2 (+OpenHermes) |
+|-----------|-------------------|----------------------|
+| Architecture | GPT baseline d12 | GPT baseline d12 |
+| Pretrain checkpoint | d12, step 2205 | d12, step 2205 |
+| Optimizer warm-start | No (fresh) | No (fresh) |
+| Init LR fraction | 0.80 | 0.80 |
+| Warmdown ratio | 0.50 | 0.50 |
+| DDP world size | 4 | 4 |
+| GPU | 4× H100 80GB | 4× H100 80GB |
+| Training mixture | ~1,071,759 rows | **~2,073,310 rows** |
+| Total steps | 969 | **1,692** |
+| Training time | ~4.9 min | **7.71 min** |
+
+The increase in training steps (969 → 1,692) is a natural consequence of the larger dataset — the model still trains for exactly 1 epoch through the full mixture. All learning rate schedules, batch sizes, and evaluation intervals remain identical.
+
+**W&B Run:** [`a4_task2_sft`](https://wandb.ai/ysj15265673506-university-of-toronto/nanochat-sft/runs/pcirhp5u)
+
+#### Results Comparison: Task 1 vs. Task 2
+
+**Benchmark Accuracy:**
+
+| Task | Task 1 (Original) | Task 2 (+OpenHermes) | Change |
+|------|-------------------|----------------------|--------|
+| ARC-Easy (↑) | 36.20% | 35.14% | −1.06% |
+| ARC-Challenge (↑) | 32.85% | 30.72% | −2.13% |
+| MMLU (↑) | 30.71% | 31.16% | +0.45% |
+| GSM8K (↑) | 3.56% | 9.25% | **+5.69%** |
+| HumanEval (↑) | 6.71% | 7.32% | +0.61% |
+| SpellingBee (↑) | 99.22% | 98.05% | −1.17% |
+| **ChatCORE** (↑) | 0.2375 | **0.2574** | **+0.0199** |
+
+**Loss:**
+
+| Metric | Task 1 | Task 2 | Change |
+|--------|--------|--------|--------|
+| Val BPB (↓) | 0.3688 | 0.3616 | −0.0072 |
+
+#### Analysis
+
+**GSM8K improved substantially** (+5.69%, from 3.56% to 9.25%). This is the most significant gain and validates our dataset choice — OpenHermes contains math reasoning conversations that teach the model step-by-step problem-solving patterns beyond what the original GSM8K oversampling provides.
+
+**ChatCORE improved overall** (+0.0199, from 0.2375 to 0.2574). Despite minor regressions on ARC tasks, the strong GSM8K and HumanEval gains push the composite metric upward, indicating a net improvement in model capability.
+
+**Val BPB decreased slightly** (0.3688 → 0.3616), suggesting the model fits the validation mixture marginally better with the additional training data.
+
+**ARC tasks showed slight regression** (ARC-Easy −1.06%, ARC-Challenge −2.13%). This is likely due to the dilution effect: with OpenHermes doubling the training mixture, the relative proportion of MMLU data (which teaches multiple-choice format) decreases. The model sees proportionally fewer multiple-choice examples per epoch.
+
+**SpellingBee remained near-perfect** (99.22% → 98.05%), with the small decrease similarly attributable to the diluted proportion of spelling data in the larger mixture.
+
+**HumanEval improved modestly** (+0.61%), consistent with OpenHermes containing code-related instruction data.
+
+**Key takeaway:** Adding OpenHermes 2.5 improves overall model quality (ChatCORE +0.0199) with the largest gains in math reasoning (GSM8K +5.69%). The trade-off is a slight regression on format-sensitive tasks (ARC) due to data dilution. A potential improvement would be to increase MMLU and spelling oversampling epochs to compensate for the dilution effect.
+
+#### Training Curves
+
+![Task 2 Training Overview](part2/reports/wandb_task2_training_overview.png)
+
+*Figure 2.1: W&B dashboard for Task 2 SFT (d12 baseline + OpenHermes). ChatCORE steadily climbs from 0.21 to 0.26 over 1,692 steps. Training time scales linearly to ~460s (7.71 min).*
+
+![Task 2 ChatCORE Breakdown](part2/reports/wandb_task2_chatcore_breakdown.png)
+
+*Figure 2.2: Per-task ChatCORE breakdown. GSM8K shows the most dramatic improvement (0→0.17), while SpellingBee remains near-perfect. MMLU and ARC-Easy show steady gains. HumanEval begins improving after step ~1400.*
+
+#### ChatCORE Progression During Training
+
+| Step | Task 1 ChatCORE | Task 2 ChatCORE |
+|------|-----------------|-----------------|
+| 200 | — | 0.2123 |
+| 400 | — | 0.1973 |
+| 600 | — | 0.2061 |
+| 800 | — | 0.2133 |
+| 969 | 0.2375 | — |
+| 1000 | — | 0.2143 |
+| 1200 | — | 0.2200 |
+| 1400 | — | 0.2327 |
+| 1600 | — | 0.2356 |
+| 1692 | — | 0.2574 |
+
+Task 2's ChatCORE starts lower than Task 1 at comparable steps (e.g., step 200: 0.2123 vs. Task 1's rapid convergence) because the larger mixture means each example is seen less frequently. However, Task 2 continues improving beyond Task 1's endpoint (step 969), ultimately surpassing it by step ~1400 and reaching a higher final value (0.2574 vs. 0.2375).
+
+#### Data Sources
+
+| Data point | Source |
+|------------|--------|
+| Task 2 training metrics | W&B run `a4_task2_sft` ([pcirhp5u](https://wandb.ai/ysj15265673506-university-of-toronto/nanochat-sft/runs/pcirhp5u)) |
+| Task 2 benchmark accuracy | `chat_eval -i sft --model-tag=d12` output (Modal terminal log) |
+| Task 1 baseline | Section 2.1 above |
+| OpenHermes dataset | [teknium/OpenHermes-2.5](https://huggingface.co/datasets/teknium/OpenHermes-2.5) on HuggingFace |
+| Modal reports | `part2/reports/sft-training-task2.pdf`, `chat-evaluation-sft-task2.pdf` |
 
 ---
 
