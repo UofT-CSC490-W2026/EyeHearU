@@ -335,7 +335,10 @@ Our first experiment activates all reward components simultaneously (correctness
 | Close RL | close‑arithmetic only | **10.9%** |
 | Combined RL (Run #2) | correctness + format + steps + close | **10.2%** |
 
-The aggregate plot `part4/plots/gsm8k_comparison.png` shows that the combined model slightly underperforms baseline on exact accuracy. However, when we break GSM8K down by domain (`domain_by_config.png`), answer magnitude (`magnitude_by_config.png`), operation type (`operations_by_config.png`), and reasoning steps (`steps_by_config.png`), the combined model closely tracks baseline RL: all runs share the same qualitative shape, with peak performance on 1–2‑step problems, large answers (100–999), and multiplicative reasoning. Combined reward therefore does **not** change which kinds of GSM8K problems are easiest, but it does change the detailed error structure discussed below.
+![GSM8K Accuracy Across RL Reward Configurations](part4/plots/gsm8k_comparison.png)
+![by domain](part4/plots/domain_by_config.png)
+
+The aggregate plot above shows that the combined model slightly underperforms baseline on exact accuracy. However, when we break GSM8K down by domain, answer magnitude, operation type, and reasoning steps (`part4/plots/domain_by_config.png`, `part4/plots/magnitude_by_config.png`, `part4/plots/operations_by_config.png`, `part4/plots/steps_by_config.png`), the combined model closely tracks baseline RL: all runs share the same qualitative shape, with peak performance on 1–2‑step problems, large answers (100–999), and multiplicative reasoning. Combined reward therefore does **not** change which kinds of GSM8K problems are easiest, but it does change the detailed error structure discussed below.
 
 ### 4.3 Separate Reward Environments (Runs #3 and #4)
 
@@ -344,13 +347,17 @@ To understand the impact of each new reward, we also trained two single‑compon
 - **Format RL (Run #3)** uses only the format reward.  
 - **Close RL (Run #4)** uses only the close‑arithmetic reward.
 
-Across all math slices the **Format RL environment performs the worst**. In `domain_by_config.png` it is below baseline and combined RL for every domain, especially money/shopping and people/age. `magnitude_by_config.png` shows lower accuracy across all answer magnitudes, and `operations_by_config.png` reveals clear degradation on multiplication, addition, subtraction, and division. Even at the favorable 1–2 reasoning steps in `steps_by_config.png`, Format RL lags the other runs by several percentage points. This indicates that the model has largely learned to emit well‑formatted `#### <number>` answers without actually improving its math.
+Across all math slices the **Format RL environment performs the worst**. In `part4/plots/domain_by_config.png` it is below baseline and combined RL for every domain, especially money/shopping and people/age. `part4/plots/magnitude_by_config.png` shows lower accuracy across all answer magnitudes, and `part4/plots/operations_by_config.png` reveals clear degradation on multiplication, addition, subtraction, and division. Even at the favorable 1–2 reasoning steps in `part4/plots/steps_by_config.png`, Format RL lags the other runs by several percentage points. This indicates that the model has largely learned to emit well‑formatted `#### <number>` answers without actually improving its math.
 
-In contrast, **Close RL matches the baseline’s 10.9% GSM8K accuracy** while reshaping which individual problems are solved. It often slightly outperforms baseline on specific domains (e.g., food/cooking, people/age, distance/travel) and on some magnitude buckets, without harming performance on any operation type. The per‑problem difference plot (`part4/plots/per_problem_diff.png`) makes this concrete: most problems stay the same, but a noticeable band of green points show cases where Close RL fixes a baseline error, balanced by a smaller number of red regressions.
+In contrast, **Close RL matches the baseline’s 10.9% GSM8K accuracy** while reshaping which individual problems are solved. It often slightly outperforms baseline on specific domains (e.g., food/cooking, people/age, distance/travel) and on some magnitude buckets, without harming performance on any operation type. The per‑problem difference plot below makes this concrete: most problems stay the same, but a noticeable band of green points show cases where Close RL fixes a baseline error, balanced by a smaller number of red regressions.
+
+![Per‑problem change vs baseline RL (close‑only)](part4/plots/per_problem_diff.png)
 
 ### 4.4 GSM8K Error Analysis and Mistake Types
 
-We re‑applied the Part 3 GSM8K error taxonomy (wrong arithmetic, close arithmetic, format error) to all four RL runs. The grouped bar chart in `part4/plots/error_type_comparison.png` reveals three key patterns:
+We re‑applied the Part 3 GSM8K error taxonomy (wrong arithmetic, close arithmetic, format error) to all four RL runs. The grouped bar chart in `part4/plots/error_type_comparison.png` (reproduced below) reveals three key patterns:
+
+![GSM8K Error Types by Reward Configuration](part4/plots/error_type_comparison.png)
 
 - **Wrong arithmetic dominates for every configuration**. Each model has roughly 1,000 wrong‑arithmetic errors, confirming that arithmetic execution, not format, is the limiting factor at this scale.
 - **Format RL offers little benefit**. It modestly reduces format‑error counts but still leaves a substantial number of formatting issues, and most of its mistakes are still wrong‑arithmetic. This matches its weak performance across domains and operations.
