@@ -97,7 +97,7 @@ BASE_DIR = "/data/.cache/nanochat"
 # Modal kills a container after this many seconds of wall-clock time.
 # The pretrain timeout must be longer than your expected training time.
 PRETRAIN_TIMEOUT_SEC  = 60 * 60 * 6    # 6 hours
-FINETUNE_TIMEOUT_SEC  = 60 * 60 * 2    # 2 hours (SFT and RL are much shorter)
+FINETUNE_TIMEOUT_SEC  = 60 * 60 * 4    # 4 hours (combined-reward RL needs more time)
 DOWNLOAD_TIMEOUT_SEC  = 60 * 90        # 90 min for shard download
 
 # ── Derived: GPU count ────────────────────────────────────────────────────────
@@ -784,6 +784,200 @@ def stage_gsm8k_detailed_eval() -> None:
 
     volume.commit()
     print("Detailed GSM8K eval complete. Files saved to report dir.")
+
+
+# =============================================================================
+# A4 PART 4 — COMBINED & SEPARATE REWARD RL RUNS
+# =============================================================================
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_rl_combined(wandb_run: str = "a4_rl_combined") -> None:
+    """
+    Part 4: RL with all reward components active (correctness + format + steps + close).
+    Loads SFT checkpoint from d12, saves RL checkpoint to d12_combined.
+
+    Run:
+        modal run nanochat_modal.py::stage_rl_combined
+    """
+    _setup_cache()
+    src_tag = f"d{DEPTH}"
+    save_tag = f"d{DEPTH}_combined"
+
+    print(f"Running RL with combined rewards (load SFT from {src_tag}, save to {save_tag})...")
+    _torchrun(
+        "scripts.chat_rl_combined2rwd",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={src_tag}",
+            f"--save-tag={save_tag}",
+            "--w-correct=1.0",
+            "--w-format=0.2",
+            "--w-steps=0.2",
+            "--w-close=0.3",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating combined-reward RL checkpoint...")
+    _torchrun("scripts.chat_eval",
+              ["-i", "rl", f"--model-tag={save_tag}"],
+              nproc=_N_FINETUNE_GPUS)
+
+    volume.commit()
+    print("Combined-reward RL complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_rl_format_only(wandb_run: str = "a4_rl_format_only") -> None:
+    """
+    Part 4: RL with correctness + format reward only.
+    Loads SFT checkpoint from d12, saves RL checkpoint to d12_format.
+
+    Run:
+        modal run nanochat_modal.py::stage_rl_format_only
+    """
+    _setup_cache()
+    src_tag = f"d{DEPTH}"
+    save_tag = f"d{DEPTH}_format"
+
+    print(f"Running RL with format reward only (load SFT from {src_tag}, save to {save_tag})...")
+    _torchrun(
+        "scripts.chat_rl_combined2rwd",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={src_tag}",
+            f"--save-tag={save_tag}",
+            "--w-correct=1.0",
+            "--w-format=0.2",
+            "--w-steps=0.0",
+            "--w-close=0.0",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating format-only RL checkpoint...")
+    _torchrun("scripts.chat_eval",
+              ["-i", "rl", f"--model-tag={save_tag}"],
+              nproc=_N_FINETUNE_GPUS)
+
+    volume.commit()
+    print("Format-only RL complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_rl_close_only(wandb_run: str = "a4_rl_close_only") -> None:
+    """
+    Part 4: RL with correctness + close-arithmetic reward only.
+    Loads SFT checkpoint from d12, saves RL checkpoint to d12_close.
+
+    Run:
+        modal run nanochat_modal.py::stage_rl_close_only
+    """
+    _setup_cache()
+    src_tag = f"d{DEPTH}"
+    save_tag = f"d{DEPTH}_close"
+
+    print(f"Running RL with close-arithmetic reward only (load SFT from {src_tag}, save to {save_tag})...")
+    _torchrun(
+        "scripts.chat_rl_combined2rwd",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={src_tag}",
+            f"--save-tag={save_tag}",
+            "--w-correct=1.0",
+            "--w-format=0.0",
+            "--w-steps=0.0",
+            "--w-close=0.3",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating close-only RL checkpoint...")
+    _torchrun("scripts.chat_eval",
+              ["-i", "rl", f"--model-tag={save_tag}"],
+              nproc=_N_FINETUNE_GPUS)
+
+    volume.commit()
+    print("Close-only RL complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_eval_part4() -> None:
+    """
+    Eval-only for all Part 4 RL checkpoints.
+
+    Run:
+        modal run nanochat_modal.py::stage_eval_part4
+    """
+    _setup_cache()
+
+    for tag in [f"d{DEPTH}_combined", f"d{DEPTH}_format", f"d{DEPTH}_close"]:
+        print(f"Evaluating RL checkpoint {tag}...")
+        _torchrun("scripts.chat_eval",
+                  ["-i", "rl", f"--model-tag={tag}"],
+                  nproc=_N_FINETUNE_GPUS)
+
+    volume.commit()
+    print("All Part 4 evals complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_gsm8k_detailed_eval_part4() -> None:
+    """
+    Run detailed per-problem GSM8K evaluation on all Part 4 RL checkpoints.
+    Saves JSON files with per-problem results for downstream error analysis.
+
+    Run:
+        modal run nanochat_modal.py::stage_gsm8k_detailed_eval_part4
+    """
+    _setup_cache()
+
+    tags = [
+        (f"d{DEPTH}_combined", "gsm8k_detailed_rl_combined.json"),
+        (f"d{DEPTH}_format",   "gsm8k_detailed_rl_format.json"),
+        (f"d{DEPTH}_close",    "gsm8k_detailed_rl_close.json"),
+    ]
+
+    for tag, filename in tags:
+        print(f"Running detailed GSM8K eval on RL checkpoint {tag}...")
+        _torchrun(
+            "scripts.gsm8k_detailed_eval",
+            ["--source=rl", f"--model-tag={tag}", f"--output-filename={filename}"],
+            nproc=_N_FINETUNE_GPUS,
+        )
+
+    volume.commit()
+    print("All Part 4 detailed evals complete. JSON files saved to report dir.")
 
 
 # =============================================================================

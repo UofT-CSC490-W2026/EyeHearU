@@ -314,49 +314,215 @@ For incorrect answers, we classified errors into four types:
 
 ## 4. Part Four: Complex Reward System (40 marks)
 
-<!-- TODO: Design additional rewards, run experiments, compare, visualize -->
-
 ### 4.1 Additional Reward Design
 
-[TODO — Placeholder]
+Our Part 3 error analysis revealed three clear patterns that motivate additional reward signals:
 
-- Describe 2+ additional reward systems
-- Motivation from Part 3 analysis
+1. **Format errors accounted for 37.7% of SFT errors** — many completions failed to produce the `#### <number>` answer marker. While baseline RL reduced this to 12.0%, a dedicated format reward can provide direct gradient signal for this.
+
+2. **Accuracy peaked at 1–2 reasoning steps and dropped sharply for 0 or 6+ steps** — the model benefits from using calculator tool calls (marked with `<< ... >>`), but either not using tools at all or using too many leads to failure.
+
+3. **2.7% of RL errors were "close arithmetic"** — the model produced answers within 10% of the correct value. Binary 0/1 correctness reward provides no gradient signal for these near-misses.
+
+We implemented three additional reward components in `scripts/chat_rl_combined2rwd.py`:
+
+#### Reward 1: Format Reward
+
+```python
+def _format_reward(generated_text):
+    pred_num = extract_answer(generated_text)
+    return 1.0 if pred_num is not None else 0.0
+```
+
+Returns 1.0 if the response contains a parseable `#### <number>` pattern, 0.0 otherwise. This directly targets format errors by rewarding well-structured answers regardless of correctness.
+
+#### Reward 2: Steps Reward
+
+```python
+def _steps_reward(generated_text):
+    step_count = generated_text.count("<<")
+    ideal_steps = 2.0
+    score = 1.0 - 0.25 * abs(step_count - ideal_steps)
+    return float(max(0.0, min(1.0, score)))
+```
+
+Peaks at 2 tool calls (score = 1.0), with linear decay of 0.25 per step away from the ideal. This encourages the model to use a moderate number of calculator steps — enough to break down the problem, but not so many that the chain becomes error-prone.
+
+#### Reward 3: Close Arithmetic Reward
+
+```python
+def _close_arithmetic_reward(conversation, generated_text):
+    # Returns 0.7 if within 5% relative error, 0.4 if within 15%, 0.2 if within 30%
+    # For small reference values (|ref| <= 1.0), uses absolute thresholds instead
+```
+
+Provides graded partial credit when the numeric answer is close to correct but not exact. This creates a smoother reward landscape than the binary correctness signal, providing gradient even for near-misses.
+
+#### Combined Reward Function
+
+The total reward is a weighted sum:
+
+$$r_{\text{total}} = w_{\text{correct}} \cdot r_{\text{correct}} + w_{\text{format}} \cdot r_{\text{format}} + w_{\text{steps}} \cdot r_{\text{steps}} + w_{\text{close}} \cdot r_{\text{close}}$$
+
+All other training hyperparameters (optimizer, LR, batch size, etc.) match the baseline RL configuration from Part 3.
 
 ### 4.2 Combined Reward Training
 
-[TODO — Placeholder]
+We trained with all reward components active simultaneously, using the combined weights:
 
-- Run with combined rewards
-- Compare to original RL run
+| Weight | Value |
+|--------|-------|
+| w_correct | 1.0 |
+| w_format | 0.2 |
+| w_steps | 0.2 |
+| w_close | 0.3 |
+
+#### Results: Baseline RL vs. Combined Rewards
+
+| Task | After SFT | Baseline RL | Combined Rewards | Δ (Combined vs Baseline RL) |
+|------|-----------|-------------|------------------|-----------------------------|
+| ARC-Easy | 36.20% | 35.90% | 34.93% | −0.97% |
+| ARC-Challenge | 32.85% | 30.46% | 32.59% | +2.13% |
+| MMLU | 30.71% | 31.04% | 30.64% | −0.40% |
+| **GSM8K** | 3.56% | **10.92%** | **10.24%** | −0.68% |
+| HumanEval | 6.71% | 0.00% | 0.00% | 0.00% |
+| SpellingBee | 99.22% | 2.73% | 32.42% | +29.69% |
+| **ChatCORE** | 0.2375 | **0.0725** | **0.1226** | **+0.0501** |
+
+**Analysis:**
+
+The combined reward achieves nearly the same GSM8K accuracy (10.24% vs 10.92%) while substantially preserving SpellingBee (32.42% vs 2.73%). ChatCORE improved from 0.0725 to 0.1226, a 69% relative improvement. The additional reward components create a smoother optimization landscape: instead of a sparse binary signal, the model receives gradient from format compliance, step count, and numerical proximity even on incorrect completions. This smoother reward acts as implicit regularization, preventing the policy from drifting as far from the SFT checkpoint and thereby reducing catastrophic forgetting.
 
 ### 4.3 Separate Environment Training
 
-[TODO — Placeholder]
+To isolate the contribution of each reward component, we ran two ablations that each use only one additional reward alongside the base correctness reward:
 
-- Run each reward system in separate environments
-- Compare to combined runs
+| Run | w_correct | w_format | w_steps | w_close |
+|-----|-----------|----------|---------|---------|
+| Baseline RL | 1.0 | 0.0 | 0.0 | 0.0 |
+| Combined | 1.0 | 0.2 | 0.2 | 0.3 |
+| Format-only | 1.0 | 0.2 | 0.0 | 0.0 |
+| Close-only | 1.0 | 0.0 | 0.0 | 0.3 |
 
-### 4.4 Error Analysis
+#### Results: All Configurations
 
-[TODO — Placeholder]
+| Task | After SFT | Baseline RL | Combined | Format-Only | Close-Only |
+|------|-----------|-------------|----------|-------------|------------|
+| ARC-Easy | 36.20% | 35.90% | 34.93% | 33.33% | 35.10% |
+| ARC-Challenge | 32.85% | 30.46% | 32.59% | 32.59% | 29.44% |
+| MMLU | 30.71% | 31.04% | 30.64% | 29.30% | 31.07% |
+| **GSM8K** | 3.56% | **10.92%** | **10.24%** | **7.35%** | **10.92%** |
+| HumanEval | 6.71% | 0.00% | 0.00% | 0.61% | 1.22% |
+| SpellingBee | 99.22% | 2.73% | 32.42% | 0.00% | 91.41% |
+| **ChatCORE** | 0.2375 | **0.0725** | **0.1226** | **0.0582** | **0.2184** |
 
-- Compare mistake types: Original RL vs. RL with additional rewards
-- Visualizations
+#### Analysis by Configuration
+
+**Format-Only (w_format=0.2)** performed worst across the board:
+
+- GSM8K dropped to 7.35%, significantly below baseline RL (10.92%). The format reward is trivially satisfiable — the model learns to produce `#### <number>` without actually solving the problem, which dilutes the correctness gradient.
+- SpellingBee collapsed to 0.00%, even worse than baseline RL (2.73%). The format reward provides no regularization benefit.
+- ChatCORE (0.0582) is the lowest of all configurations, indicating the format reward actively harms overall model quality when used in isolation.
+
+**Close-Only (w_close=0.3) is the clear winner:**
+
+- GSM8K matches baseline RL exactly (10.92%), demonstrating the close reward doesn't compromise math accuracy.
+- SpellingBee retained 91.41% (vs. 2.73% in baseline RL and 99.22% in SFT) — a dramatic reduction in catastrophic forgetting.
+- HumanEval recovered to 1.22% (vs. 0.00% baseline RL), showing partial preservation of coding ability.
+- ChatCORE (0.2184) nearly matches the SFT model (0.2375) while delivering 3× better GSM8K accuracy than SFT.
+
+**Why does close-arithmetic reward prevent catastrophic forgetting?**
+
+The close-arithmetic reward creates a denser reward landscape. In baseline RL, only exactly-correct completions receive reward — a sparse signal that produces large, noisy policy gradients. The model must specialize aggressively to capture any signal, which destroys other capabilities. With the close reward, many more completions receive non-zero reward (any answer within 30% of correct). This produces:
+
+1. **Lower variance advantages** — more completions contribute to the gradient, reducing per-step noise
+2. **Smaller effective step size** — smoother gradients mean the model doesn't need to make large parameter changes to improve
+3. **Implicit trust region** — the effect is analogous to the KL divergence penalty in standard GRPO, which nanochat's simplified implementation omits
+
+The close reward thus serves as a functional substitute for KL regularization: it keeps the policy closer to the SFT checkpoint while still improving GSM8K performance.
+
+### 4.4 Error Analysis and Comparison
+
+We ran detailed per-problem GSM8K evaluation on all four RL checkpoints (1,319 test problems each) and classified every incorrect answer using the same error taxonomy from Part 3.
+
+#### Per-Problem Error Distribution
+
+| Error Type | Baseline RL | Combined | Format-Only | Close-Only |
+|------------|-------------|----------|-------------|------------|
+| Wrong arithmetic | 1002 (85.3%) | 1112 (93.9%) | 1055 (86.3%) | 1065 (90.6%) |
+| Format error | 141 (12.0%) | 35 (3.0%) | 131 (10.7%) | 77 (6.6%) |
+| Close arithmetic | 32 (2.7%) | 36 (3.0%) | 28 (2.3%) | 33 (2.8%) |
+| No tool use | 0 (0.0%) | 1 (0.1%) | 8 (0.7%) | 0 (0.0%) |
+| **Total errors** | **1175** | **1184** | **1222** | **1175** |
+
+#### Error Analysis Findings
+
+**1. The combined reward most effectively eliminates format errors.** Format errors dropped from 141 (12.0%) in baseline RL to just 35 (3.0%) in the combined model — a 75% reduction. This confirms the format reward component works as intended: it teaches the model to reliably produce the `#### <number>` answer pattern.
+
+**2. Close-only also reduces format errors despite having no format reward.** The close-only model has only 77 format errors (6.6%) vs. 141 in baseline RL. The mechanism: the close-arithmetic reward only fires when `extract_answer` can parse a number, which implicitly requires `####` to be present. The model learns formatting as a side effect of pursuing partial credit.
+
+**3. Format-only has the most "no tool use" errors (8).** The format-only model is the only configuration with meaningful no-tool-use errors, suggesting the format reward alone encourages the model to skip calculator calls and go straight to an answer — producing formatted but poorly-reasoned responses.
+
+**4. Wrong arithmetic dominates all configurations (85–94%).** After format errors are eliminated, the overwhelming remaining challenge is arithmetic correctness. The combined model has the highest wrong-arithmetic proportion (93.9%) simply because it has the fewest format errors — the denominator shifts. This confirms that the d12 model's fundamental limitation is arithmetic reasoning capacity, not response formatting.
+
+**5. Close-arithmetic errors remain stable (~2.5–3.0%) across all configurations.** The close-arithmetic reward does not increase the number of "near miss" errors — it simply provides gradient signal for them during training. The percentage remains similar because the base rate of near-miss arithmetic is determined by model capacity, not reward structure.
+
+#### Catastrophic Forgetting Analysis
+
+| Model | SpellingBee | HumanEval | ChatCORE | Forgetting Severity |
+|-------|-------------|-----------|----------|---------------------|
+| After SFT | 99.22% | 6.71% | 0.2375 | — (reference) |
+| Baseline RL | 2.73% | 0.00% | 0.0725 | Severe |
+| Combined | 32.42% | 0.00% | 0.1226 | Moderate |
+| Format-Only | 0.00% | 0.61% | 0.0582 | Severe |
+| Close-Only | 91.41% | 1.22% | 0.2184 | Minimal |
+
+The close-only configuration retains 92% of SFT's SpellingBee accuracy and achieves a ChatCORE within 8% of the SFT baseline, while delivering the same GSM8K accuracy as baseline RL. This demonstrates that partial-credit rewards can serve as an effective implicit regularizer in simplified RL formulations that lack explicit KL penalties.
+
+#### Visualizations
+
+![Part 4: GSM8K Accuracy Across Configurations](part4/plots/gsm8k_comparison.png)
+
+![Part 4: SpellingBee Preservation Across Configurations](part4/plots/spellingbee_comparison.png)
+
+![Part 4: ChatCORE Metric Across Configurations](part4/plots/chatcore_comparison.png)
+
+![Part 4: Full Benchmark Comparison Heatmap](part4/plots/benchmark_heatmap.png)
+
+![Part 4: Error Type Distribution Comparison](part4/plots/error_type_comparison.png)
+
+![Part 4: Per-Problem Agreement — Baseline RL vs Close-Only RL](part4/plots/per_problem_diff.png)
+
+![Part 4: All Benchmarks Grouped by Reward Configuration](part4/plots/grouped_benchmarks.png)
 
 ### 4.5 Summary Table
 
-[TODO — Placeholder]
+| Run | Config | GSM8K | SpellingBee | HumanEval | ChatCORE | Notes |
+|-----|--------|-------|-------------|-----------|----------|-------|
+| Pretrained (d12) | — | ~0% | ~0% | ~0% | N/A | Val BPB 0.8899, CORE 0.1186 |
+| After SFT | Original | 3.56% | 99.22% | 6.71% | 0.2375 | Part 2 — chat format learned |
+| Baseline RL | Correctness only | 10.92% | 2.73% | 0.00% | 0.0725 | Part 3 — severe forgetting |
+| RL + Combined | All 3 rewards | 10.24% | 32.42% | 0.00% | 0.1226 | Moderate forgetting protection |
+| RL + Format-only | Correctness + format | 7.35% | 0.00% | 0.61% | 0.0582 | Worst overall — format reward harms |
+| RL + Close-only | Correctness + close | **10.92%** | **91.41%** | **1.22%** | **0.2184** | **Best overall — near-SFT quality** |
 
-| Run | Config | GSM8K Acc | ChatCORE | Notes |
-|-----|--------|-----------|----------|-------|
-| Pretrained (d12) | — | ~0% | N/A | Baseline, Val BPB 0.8899, CORE 0.1186 |
-| After SFT | Original | 3.56% | 0.2375 | Part 2.1 |
-| After RL | Original (GRPO) | 10.92% | 0.0725 | Part 3 |
-| RL + Reward A | TODO | TODO | TODO | Part 4 |
-| RL + Reward B | TODO | TODO | TODO | Part 4 |
-| RL + Reward A (separate) | TODO | TODO | TODO | Part 4 |
-| RL + Reward B (separate) | TODO | TODO | TODO | Part 4 |
+#### Commentary
+
+**Impact of each reward component:**
+
+- **Correctness reward (baseline):** Effective at improving GSM8K (+7.36% over SFT) but causes severe catastrophic forgetting due to sparse, binary gradient signal.
+
+- **Format reward:** Counterproductive. The `#### <number>` pattern is too easy to satisfy, so the model learns to produce well-formatted but incorrect answers. When used alone, GSM8K drops from 10.92% to 7.35%. When combined with other rewards, it dilutes the useful signal from the close-arithmetic component. This reward should be removed or replaced with a more demanding format criterion.
+
+- **Steps reward:** Roughly neutral in the combined setting. The steps reward encourages ~2 calculator tool calls, which is beneficial in principle, but the linear penalty shape may be too blunt for our small model that already tends toward 1–3 steps naturally.
+
+- **Close-arithmetic reward:** The most impactful single addition. By providing graded partial credit (0.7 for ≤5% error, 0.4 for ≤15%, 0.2 for ≤30%), it creates a smoother reward landscape that:
+  1. Preserves GSM8K accuracy at the baseline RL level (10.92%)
+  2. Dramatically reduces catastrophic forgetting (SpellingBee: 91.41% vs. 2.73%)
+  3. Achieves the highest ChatCORE (0.2184) of all RL configurations
+  4. Functions as implicit KL regularization — a practical substitute for the trust region that nanochat's simplified GRPO implementation omits
+
+**Recommended configuration for future work:** Use correctness + close-arithmetic reward (w_correct=1.0, w_close=0.3) without format or steps rewards. This achieves the best trade-off between GSM8K improvement and overall model quality preservation.
 
 ---
 

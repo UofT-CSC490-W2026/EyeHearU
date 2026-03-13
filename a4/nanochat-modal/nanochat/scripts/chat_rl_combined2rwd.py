@@ -38,6 +38,7 @@ parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (e
 # Model loading
 parser.add_argument("--model-tag", type=str, default=None, help="model tag to load from")
 parser.add_argument("--model-step", type=int, default=None, help="model step to load from")
+parser.add_argument("--save-tag", type=str, default=None, help="model tag for saving checkpoints (defaults to --model-tag)")
 # Training horizon
 parser.add_argument("--num-epochs", type=int, default=1, help="number of epochs over GSM8K")
 # Batch sizes / sampling
@@ -427,7 +428,8 @@ for step in range(num_steps):
     if master_process and ((step > 0 and step % args.save_every == 0) or step == num_steps - 1):
         base_dir = get_base_dir()
         depth = model.config.n_layer
-        output_dirname = args.model_tag if args.model_tag else f"d{depth}" # base the model tag on the depth of the base model
+        save_tag = args.save_tag or args.model_tag
+        output_dirname = save_tag if save_tag else f"d{depth}"
         checkpoint_dir = os.path.join(base_dir, "chatrl_checkpoints", output_dirname)
         model_config_kwargs = model.config.__dict__ # slightly naughty, abusing the simplicity of GPTConfig, TODO nicer
         save_checkpoint(
