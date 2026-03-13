@@ -466,7 +466,7 @@ Part 3 showed that on GSM8K the RL model still made many **wrong arithmetic** er
 - **Steps reward**: encourages a moderate number of calculator calls by peaking at 2 tool calls and decaying as we move away from that count, mirroring Part 3’s finding that accuracy is highest at 1–2 steps and worse for 0 or many steps.
 - **Close‑arithmetic reward**: assigns partial credit when the predicted answer is numerically close to the ground truth (e.g., small relative error), so that “almost right” arithmetic receives a stronger learning signal than obviously wrong answers.
 
-The total reward is a weighted sum: $r_{\text{total}} = w_{\text{correct}} \cdot r_{\text{correct}} + w_{\text{format}} \cdot r_{\text{format}} + w_{\text{steps}} \cdot r_{\text{steps}} + w_{\text{close}} \cdot r_{\text{close}}$
+The total reward is a weighted sum: `r_total = w_correct * r_correct + w_format * r_format + w_steps * r_steps + w_close * r_close`
 
 We treat the original **0/1 correctness reward** as our baseline environment and use these three components to define additional RL environments with the following weight configurations:
 
