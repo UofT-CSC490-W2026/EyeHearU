@@ -1100,6 +1100,66 @@ def stage_eval_rl_task1() -> None:
 
 
 # =============================================================================
+# A4 PART 2 — TASK 2: SFT with extra dataset (OpenHermes-2.5), standard d12
+# =============================================================================
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_sft_task2(wandb_run: str = WANDB_RUN_TASK2_SFT) -> None:
+    """
+    A4 Part 2 Task 2 — SFT with original mixture + OpenHermes-2.5.
+
+    Uses the standard d12 model (no SwiGLU), same as stage_sft Task 1.
+    Downloads and converts OpenHermes-2.5 automatically if not cached.
+
+    Run:
+        modal run nanochat_modal.py::stage_sft_task2
+    """
+    _setup_cache()
+
+    identity_dest = os.path.join(NANOCHAT_CACHE, "identity_conversations.jsonl")
+    print("Downloading identity conversations for SFT personality layer...")
+    _curl(IDENTITY_JSONL_URL, identity_dest)
+
+    openhermes_dest = os.path.join(NANOCHAT_CACHE, "openhermes_2.5.jsonl")
+    if not os.path.exists(openhermes_dest):
+        print("OpenHermes-2.5 JSONL not found on volume — downloading and converting...")
+        _python("scripts.convert_openhermes", [openhermes_dest])
+        volume.commit()
+        print("OpenHermes-2.5 JSONL created and committed to volume.")
+    else:
+        print(f"OpenHermes-2.5 JSONL found at {openhermes_dest}, skipping download.")
+
+    model_tag = f"d{DEPTH}"
+    print(f"Running SFT Task 2 (original + OpenHermes-2.5) on {model_tag}...")
+    _torchrun(
+        "scripts.chat_sft",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={model_tag}",
+            "--load-optimizer=0",
+            f"--extra-jsonl={openhermes_dest}",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating SFT Task 2 checkpoint on task benchmarks...")
+    _torchrun(
+        "scripts.chat_eval",
+        ["-i", "sft", f"--model-tag={model_tag}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("SFT Task 2 complete.")
+
+
+# =============================================================================
 # FULL SPEEDRUN PIPELINE (main entrypoint)
 # =============================================================================
 
