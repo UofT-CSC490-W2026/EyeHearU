@@ -29,12 +29,12 @@ spec:
           env:
             - name: PIPELINE_ENV
               value: "production"
-            - name: S3_BUCKET
+            - name: AWS_S3_BUCKET
               valueFrom:
                 configMapKeyRef:
                   name: eyehearu-config
                   key: s3-bucket
-            - name: MODEL_S3_KEY
+            - name: AWS_S3_MODEL_KEY
               valueFrom:
                 configMapKeyRef:
                   name: eyehearu-config
