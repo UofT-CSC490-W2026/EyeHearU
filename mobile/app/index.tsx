@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -22,12 +22,16 @@ const BRAND = {
 export default function HomeScreen() {
   const handAnim = useRef(new Animated.Value(0)).current;
 
-  Animated.loop(
-    Animated.sequence([
-      Animated.timing(handAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
-      Animated.timing(handAnim, { toValue: 0, duration: 1500, useNativeDriver: true }),
-    ])
-  ).start();
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(handAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
+        Animated.timing(handAnim, { toValue: 0, duration: 1500, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [handAnim]);
 
   const handRotate = handAnim.interpolate({
     inputRange: [0, 0.5, 1],
