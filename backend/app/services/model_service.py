@@ -74,8 +74,22 @@ def load_model(settings):
     model.replace_logits(num_classes)
 
     device = settings.model_device
-    state = torch.load(str(model_path), map_location=device, weights_only=False)
+    state = torch.load(str(model_path), map_location=device, weights_only=True)
 
+    # Ensure we only work with an actual state_dict-like mapping
+    if not isinstance(state, dict):
+        # Some checkpoints may wrap the state_dict; try to unwrap safely.
+        get_state_dict = getattr(state, "state_dict", None)
+        if callable(get_state_dict):
+            state = get_state_dict()
+        else:
+            raise ValueError(
+                f"Unexpected checkpoint type {type(state)!r}; expected dict or object with state_dict()."
+            )
+    if not isinstance(state, dict):
+        raise ValueError(
+            f"Checkpoint state_dict is not a dict (got {type(state)!r}); cannot load safely."
+        )
     model_state = model.state_dict()
     compatible = {}
     skipped = []
