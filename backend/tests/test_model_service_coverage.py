@@ -132,6 +132,82 @@ def test_predict_unsqueeze_dim4():
     assert len(out) == 2
 
 
+def test_load_model_non_dict_checkpoint_with_state_dict(tmp_path):
+    """Cover lines 82-84: checkpoint is not a dict but has .state_dict()."""
+    label = tmp_path / "lm.json"
+    label.write_text(json.dumps({"gloss_to_index": {"a": 0, "b": 1}}))
+
+    from ml.i3d_msft.pytorch_i3d import InceptionI3d
+
+    real = InceptionI3d(400, in_channels=3)
+    real.replace_logits(2)
+    good_state = real.state_dict()
+
+    wrapper = MagicMock()
+    wrapper.state_dict.return_value = good_state
+
+    ckpt = tmp_path / "m.pt"
+    torch.save(good_state, ckpt)
+
+    settings = SimpleNamespace(
+        model_path=str(ckpt),
+        label_map_path=str(label),
+        model_device="cpu",
+        aws_s3_bucket="b",
+        aws_s3_region="r",
+        aws_s3_model_key="k",
+    )
+    with patch("torch.load", return_value=wrapper):
+        model, idx = ms.load_model(settings)
+    assert len(idx) == 2
+    wrapper.state_dict.assert_called_once()
+
+
+def test_load_model_non_dict_checkpoint_no_state_dict(tmp_path):
+    """Cover lines 85-88: checkpoint is not a dict and has no .state_dict()."""
+    label = tmp_path / "lm.json"
+    label.write_text(json.dumps({"gloss_to_index": {"a": 0}}))
+
+    ckpt = tmp_path / "m.pt"
+    ckpt.write_bytes(b"x")
+
+    settings = SimpleNamespace(
+        model_path=str(ckpt),
+        label_map_path=str(label),
+        model_device="cpu",
+        aws_s3_bucket="b",
+        aws_s3_region="r",
+        aws_s3_model_key="k",
+    )
+    with patch("torch.load", return_value="not-a-dict"):
+        with pytest.raises(ValueError, match="Unexpected checkpoint type"):
+            ms.load_model(settings)
+
+
+def test_load_model_state_dict_returns_non_dict(tmp_path):
+    """Cover lines 89-92: .state_dict() returns something that is not a dict."""
+    label = tmp_path / "lm.json"
+    label.write_text(json.dumps({"gloss_to_index": {"a": 0}}))
+
+    ckpt = tmp_path / "m.pt"
+    ckpt.write_bytes(b"x")
+
+    wrapper = MagicMock()
+    wrapper.state_dict.return_value = [1, 2, 3]
+
+    settings = SimpleNamespace(
+        model_path=str(ckpt),
+        label_map_path=str(label),
+        model_device="cpu",
+        aws_s3_bucket="b",
+        aws_s3_region="r",
+        aws_s3_model_key="k",
+    )
+    with patch("torch.load", return_value=wrapper):
+        with pytest.raises(ValueError, match="not a dict"):
+            ms.load_model(settings)
+
+
 def test_repo_root_path_inserted(tmp_path, monkeypatch):
     """Cover sys.path insert when repo root was not on path."""
     import importlib
