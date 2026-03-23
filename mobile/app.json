@@ -25,9 +25,7 @@
         {
           "cameraPermission": "Allow Eye Hear U to access your camera to recognize ASL signs.",
           "microphonePermission": "Allow Eye Hear U to use the microphone for video recording.",
-          "recordAudioAndroid": {
-            "explanation": "Eye Hear U needs microphone access to record video clips."
-          }
+          "recordAudioAndroid": true
         }
       ],
       "expo-asset"
