@@ -77,7 +77,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 │   │   ├── routers/          # health.py, predict.py
 │   │   ├── schemas/          # Pydantic models
 │   │   └── services/         # model_service, preprocessing, firebase
-│   ├── tests/                # 66 tests, 100% coverage
+│   ├── tests/                # 82 tests, 100% coverage
 │   └── requirements.txt
 │
 ├── mobile/                   # React Native (Expo) mobile app

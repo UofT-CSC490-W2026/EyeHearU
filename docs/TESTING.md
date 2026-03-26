@@ -48,10 +48,37 @@ pytest tests/ --cov=app --cov-report=xml
 | Health | `test_health.py` — `/health`, `/ready` |
 | Predict API | `test_predict.py`, `test_predict_extra.py` — empty file, non-video, 503, success, `ValueError`, inference errors, empty `top_k` |
 | Preprocessing | `test_preprocessing.py`, `test_preprocessing_coverage.py` — pad/crop helpers, cv2 branches, `preprocess_video`, ImportError path |
+| Preprocessing (depth) | `test_preprocessing_depth.py` — 16 edge-case tests (10 positive, 6 negative): portrait 9:16 spatial preservation, 4K downscale, single-frame padding, [-1,1] normalization, frameskip adaptation, square aspect, center-crop geometry, interpolation selection, zero-frame error, all-reads-fail, undersized crop, missing opencv, temp file cleanup, codec crash propagation |
 | Model service | `test_model_service.py`, `test_model_service_coverage.py` — label map formats, S3 download mock, `load_model`, `predict`, `sys.path` insert |
 | Firebase | `test_firebase_service.py` — mocked `firebase_admin` |
 
-**Total:** 66 tests, **100%** line and branch coverage on `app/` as configured.
+**Total:** 82 tests, **100%** line and branch coverage on `app/` as configured.
+
+### Coverage depth: preprocessing module
+
+`preprocessing.py` is the most complex module — the critical accuracy path between
+raw phone video and the I3D model tensor. `test_preprocessing_depth.py` contains 16
+targeted tests with detailed comments explaining each edge case:
+
+**Positive tests (10):**
+- Portrait 9:16 video preserves spatial detail (the original accuracy bug)
+- 4K video downscaled before resize
+- Single-frame video padded to 64 frames
+- Normalization produces [-1, 1] range (not ImageNet)
+- Full pipeline output shape and dtype
+- Frameskip adapts to high-fps video (60fps)
+- Square video no aspect distortion
+- Center crop extracts geometrically central region
+- INTER_AREA interpolation for downscaling
+- INTER_LINEAR interpolation for upscaling
+
+**Negative tests (6):**
+- Zero-frame video raises ValueError
+- All reads fail (truncated file) raises ValueError
+- Center crop rejects undersized frames
+- Missing opencv raises RuntimeError with install hint
+- Temp file cleanup failure doesn't crash
+- Decode errors propagate through pipeline
 
 ## ML (pytest)
 
