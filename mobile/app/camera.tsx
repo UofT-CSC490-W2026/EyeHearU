@@ -11,10 +11,11 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import type { CameraType } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import * as Speech from "expo-speech";
+import { Ionicons } from "@expo/vector-icons";
 import { predictSign, type PredictionResult } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const RECORD_DURATION_MS = 3000;
+const RECORD_DURATION_S = 5;
 const HISTORY_KEY = "eyehearu_history";
 
 const BRAND = {
@@ -37,10 +38,13 @@ export default function CameraScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [facing, setFacing] = useState<CameraType>("front");
+  const [countdown, setCountdown] = useState<number>(0);
   const cameraRef = useRef<CameraView>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const busy = isRecording || isProcessing;
 
+  /* Pulse animation while recording */
   useEffect(() => {
     if (!isRecording) return;
     const anim = Animated.loop(
@@ -60,6 +64,28 @@ export default function CameraScreen() {
     anim.start();
     return () => anim.stop();
   }, [isRecording, pulseAnim]);
+
+  /* Countdown timer while recording */
+  useEffect(() => {
+    if (!isRecording) {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      setCountdown(0);
+      return;
+    }
+    setCountdown(RECORD_DURATION_S);
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [isRecording]);
 
   if (!permission) return <View style={styles.container} />;
 
@@ -105,7 +131,7 @@ export default function CameraScreen() {
 
     try {
       const video = await cameraRef.current.recordAsync({
-        maxDuration: RECORD_DURATION_MS / 1000,
+        maxDuration: RECORD_DURATION_S,
       });
 
       setIsRecording(false);
@@ -194,7 +220,12 @@ export default function CameraScreen() {
         <View style={styles.guidanceOverlay} pointerEvents="none">
           <View style={styles.guidanceSilhouette}>
             <View style={styles.silhouetteHead} />
-            <View style={styles.silhouetteBody} />
+            <View style={styles.silhouetteBody}>
+              {/* Left hand */}
+              <View style={[styles.silhouetteHand, styles.handLeft]} />
+              {/* Right hand */}
+              <View style={[styles.silhouetteHand, styles.handRight]} />
+            </View>
           </View>
           <Text style={styles.guidanceText}>
             Center yourself in the frame{"\n"}Keep hands visible
@@ -209,23 +240,26 @@ export default function CameraScreen() {
           onPress={toggleCamera}
           disabled={busy}
         >
-          <Text style={styles.topButtonText}>{"\u{1F504}"}</Text>
+          <Ionicons name="camera-reverse-outline" size={22} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.topButton}
           onPress={pickAndPredict}
           disabled={busy}
         >
-          <Text style={styles.topButtonText}>{"\u{1F4C1}"}</Text>
+          <Ionicons name="cloud-upload-outline" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
+      {/* Recording overlay with countdown */}
       {isRecording && (
         <View style={styles.recordingOverlay}>
           <Animated.View
             style={[styles.recordDot, { transform: [{ scale: pulseAnim }] }]}
           />
-          <Text style={styles.recordingText}>Recording... hold the sign steady</Text>
+          <Text style={styles.recordingText}>
+            Recording{countdown > 0 ? ` ${countdown}s` : ""}
+          </Text>
         </View>
       )}
 
@@ -307,7 +341,7 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   camera: { flex: 1 },
-  /* --- Guidance overlay --- */
+  /* --- Guidance overlay (larger silhouette with hands) --- */
   guidanceOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
@@ -315,35 +349,51 @@ const styles = StyleSheet.create({
   },
   guidanceSilhouette: {
     alignItems: "center",
-    opacity: 0.25,
-    marginBottom: 12,
+    opacity: 0.35,
+    marginBottom: 16,
   },
   silhouetteHead: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2.5,
     borderColor: "#fff",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   silhouetteBody: {
-    width: 100,
-    height: 80,
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
-    borderWidth: 2,
+    width: 140,
+    height: 110,
+    borderTopLeftRadius: 56,
+    borderTopRightRadius: 56,
+    borderWidth: 2.5,
     borderColor: "#fff",
     borderBottomWidth: 0,
+    position: "relative",
+  },
+  silhouetteHand: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#fff",
+    position: "absolute",
+    bottom: 10,
+  },
+  handLeft: {
+    left: -30,
+  },
+  handRight: {
+    right: -30,
   },
   guidanceText: {
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 15,
     textAlign: "center",
-    lineHeight: 20,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
+    lineHeight: 22,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 14,
   },
   /* --- Top controls (camera toggle + upload) --- */
   topControls: {
@@ -361,7 +411,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  topButtonText: { fontSize: 20 },
   /* --- Recording overlay --- */
   recordingOverlay: {
     position: "absolute",

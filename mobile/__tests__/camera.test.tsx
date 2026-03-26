@@ -57,6 +57,14 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
   },
 }));
 
+jest.mock("@expo/vector-icons", () => {
+  const React = require("react");
+  const { Text } = require("react-native");
+  return {
+    Ionicons: ({ name, ...props }: any) => <Text {...props}>{name}</Text>,
+  };
+});
+
 jest.mock("../services/api", () => ({
   predictSign: jest.fn(async () => ({
     sign: "hello",
@@ -135,14 +143,12 @@ describe("CameraScreen", () => {
 
     it("renders the camera toggle button", () => {
       render(<CameraScreen />);
-      // The toggle button uses the emoji \u{1F504}
-      expect(screen.getByText("\u{1F504}")).toBeTruthy();
+      expect(screen.getByText("camera-reverse-outline")).toBeTruthy();
     });
 
     it("renders the upload button", () => {
       render(<CameraScreen />);
-      // The upload button uses the emoji \u{1F4C1}
-      expect(screen.getByText("\u{1F4C1}")).toBeTruthy();
+      expect(screen.getByText("cloud-upload-outline")).toBeTruthy();
     });
 
     it("camera toggle changes facing prop", () => {
@@ -153,7 +159,7 @@ describe("CameraScreen", () => {
       expect(cameraView.props.facing).toBe("front");
 
       // Tap toggle
-      fireEvent.press(screen.getByText("\u{1F504}"));
+      fireEvent.press(screen.getByText("camera-reverse-outline"));
 
       // Should now be "back"
       const updatedCameraView = screen.getByTestId("camera-view");
@@ -163,16 +169,16 @@ describe("CameraScreen", () => {
     it("toggles back to front on second press", () => {
       render(<CameraScreen />);
 
-      fireEvent.press(screen.getByText("\u{1F504}"));
+      fireEvent.press(screen.getByText("camera-reverse-outline"));
       expect(screen.getByTestId("camera-view").props.facing).toBe("back");
 
-      fireEvent.press(screen.getByText("\u{1F504}"));
+      fireEvent.press(screen.getByText("camera-reverse-outline"));
       expect(screen.getByTestId("camera-view").props.facing).toBe("front");
     });
 
     it("upload button triggers image picker", async () => {
       render(<CameraScreen />);
-      fireEvent.press(screen.getByText("\u{1F4C1}"));
+      fireEvent.press(screen.getByText("cloud-upload-outline"));
 
       expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -188,7 +194,7 @@ describe("CameraScreen", () => {
       });
 
       render(<CameraScreen />);
-      fireEvent.press(screen.getByText("\u{1F4C1}"));
+      fireEvent.press(screen.getByText("cloud-upload-outline"));
 
       // Should not crash; should still show idle state
       // Wait a tick for promises to resolve
@@ -263,7 +269,7 @@ describe("CameraScreen", () => {
       render(<CameraScreen />);
 
       await act(async () => {
-        fireEvent.press(screen.getByText("\u{1F4C1}"));
+        fireEvent.press(screen.getByText("cloud-upload-outline"));
       });
 
       await waitFor(() => {
@@ -298,7 +304,7 @@ describe("CameraScreen", () => {
 
       // Also verify recording overlay is visible
       expect(
-        screen.getByText("Recording... hold the sign steady")
+        screen.getByText(/Recording \d+s/)
       ).toBeTruthy();
 
       // Press stop
@@ -404,7 +410,7 @@ describe("CameraScreen", () => {
       // isRecording is true, the pulse useEffect should have started
       await waitFor(() => {
         expect(
-          screen.getByText("Recording... hold the sign steady")
+          screen.getByText(/Recording \d+s/)
         ).toBeTruthy();
       });
 
@@ -415,7 +421,7 @@ describe("CameraScreen", () => {
 
       // Still recording
       expect(
-        screen.getByText("Recording... hold the sign steady")
+        screen.getByText(/Recording \d+s/)
       ).toBeTruthy();
 
       // Cleanup: resolve and restore timers
@@ -444,7 +450,7 @@ describe("CameraScreen", () => {
       render(<CameraScreen />);
 
       await act(async () => {
-        fireEvent.press(screen.getByText("\u{1F4C1}"));
+        fireEvent.press(screen.getByText("cloud-upload-outline"));
       });
 
       await waitFor(() => {
