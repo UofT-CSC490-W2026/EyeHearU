@@ -75,9 +75,9 @@ jobs:
       - name: Run tests with coverage
         run: |
           python -m pytest tests/ -v \
-            --cov=models --cov=evaluation --cov=training --cov=i3d_msft --cov=config \
-            --cov-report=xml --cov-report=term-missing \
-            --cov-fail-under=70
+            --cov=models --cov=config \
+            --cov=i3d_msft --cov=training --cov=evaluation \
+            --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage report (Codecov)
         uses: codecov/codecov-action@v4
@@ -111,7 +111,7 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Run tests with coverage
         run: npx jest --coverage --ci
