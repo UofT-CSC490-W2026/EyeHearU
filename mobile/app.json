@@ -16,7 +16,8 @@
       "bundleIdentifier": "com.eyehearu.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Eye Hear U needs camera access to recognize ASL signs.",
-        "NSMicrophoneUsageDescription": "Eye Hear U needs microphone access to record video clips of ASL signs."
+        "NSMicrophoneUsageDescription": "Eye Hear U needs microphone access to record video clips of ASL signs.",
+        "NSPhotoLibraryUsageDescription": "Eye Hear U needs photo library access to upload recorded ASL sign videos."
       }
     },
     "plugins": [
@@ -28,7 +29,13 @@
           "recordAudioAndroid": true
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Eye Hear U to access your photo library to upload ASL sign videos."
+        }
+      ]
     ],
     "scheme": "eyehearu"
   }

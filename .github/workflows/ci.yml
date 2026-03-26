@@ -1,4 +1,5 @@
-# Backend tests + coverage (pytest-cov). Uploads coverage.xml for Codecov PR comments & README badge.
+# Backend, ML, and mobile tests + coverage.
+# Uploads coverage.xml for Codecov PR comments & README badge.
 name: CI
 
 on:
@@ -35,9 +36,10 @@ jobs:
           pytest tests/ -v --cov=app --cov-report=xml --cov-report=term --cov-fail-under=100
 
       - name: Upload coverage report (Codecov)
-        uses: codecov/codecov-action@v4
+        if: always()
+        uses: codecov/codecov-action@v5
         with:
-          file: ./backend/coverage.xml
+          files: coverage.xml
           flags: backend
           name: backend
           fail_ci_if_error: false
@@ -49,3 +51,74 @@ jobs:
         run: |
           echo "## Backend coverage" >> "$GITHUB_STEP_SUMMARY"
           python -m coverage report --precision=2 >> "$GITHUB_STEP_SUMMARY"
+
+  ml:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          python -m pytest tests/ -v \
+            --cov --cov-report=xml --cov-report=term-missing \
+            --cov-fail-under=100
+
+      - name: Upload coverage report (Codecov)
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          flags: ml
+          name: ml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Coverage summary (job summary)
+        run: |
+          echo "## ML coverage" >> "$GITHUB_STEP_SUMMARY"
+          python -m coverage report --precision=2 >> "$GITHUB_STEP_SUMMARY"
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run tests with coverage
+        run: npx jest --coverage --ci
+
+      - name: Test summary (job summary)
+        if: always()
+        run: |
+          echo "## Mobile test results" >> "$GITHUB_STEP_SUMMARY"
+          echo "See job log for detailed Jest output." >> "$GITHUB_STEP_SUMMARY"

@@ -93,12 +93,12 @@ Training configuration is in `ml/config.py`. Key hyperparameters:
 
 ## Deployed Model (Inception I3D)
 
-The production model is an Inception I3D fine-tuned on the MVP gloss set (48 classes). Training was performed on the `freya-a5-training` branch using Microsoft's ASL-Citizen I3D codebase. The deployed model:
+The production model is an Inception I3D fine-tuned on 856 ASL gloss classes (v4, candidate-ac-eval-v4). Training was performed on the `freya-a5-training` branch using Microsoft's ASL-Citizen I3D codebase. The deployed model:
 
 - Accepts 64-frame video clips at 224x224 resolution
 - Uses `[-1, 1]` pixel normalisation (different from the in-repo R3D baseline which uses ImageNet normalisation)
 - Outputs `(1, num_classes, T')` logits, temporally max-pooled to `(1, num_classes)`
-- Achieves high accuracy on the 48-class MVP vocabulary
+- Achieves high accuracy on the 856-class vocabulary
 
 The in-repo R3D baseline (`ml/models/classifier.py`) serves as a reproducible training benchmark using torchvision's 3D CNNs with 16-frame clips and ImageNet normalisation.
 

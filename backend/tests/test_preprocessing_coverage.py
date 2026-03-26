@@ -51,7 +51,8 @@ def test_load_rgb_frames_mobile_4k_downscale():
     with patch("cv2.VideoCapture", return_value=cap):
         out = pre._load_rgb_frames("/fake.mp4", max_frames=4)
     assert out.shape[0] >= 1
-    assert max(out.shape[1], out.shape[2]) <= pre.MAX_SIDE
+    # After short-side-256 resize, short side should be RESIZE_SIDE
+    assert min(out.shape[1], out.shape[2]) == pre.RESIZE_SIDE
 
 
 def test_load_rgb_frames_frameskip_1():
@@ -206,3 +207,73 @@ def test_preprocess_video_decode_error_propagates():
     with patch.object(pre, "_load_rgb_frames", side_effect=ValueError("bad")):
         with pytest.raises(ValueError, match="bad"):
             pre.preprocess_video(b"x")
+
+
+def test_load_rgb_frames_portrait_preserves_detail():
+    """Portrait (9:16) video should NOT crush width; short side becomes RESIZE_SIDE."""
+    import cv2
+
+    cap = MagicMock()
+
+    def _get(prop):
+        return 30 if prop == cv2.CAP_PROP_FRAME_COUNT else 0
+
+    cap.get.side_effect = _get
+    # Simulate portrait phone video after mobile cap: 1280x720 (h x w)
+    portrait = _bgr_frame(1280, 720)
+    cap.read.return_value = (True, portrait)
+    with patch("cv2.VideoCapture", return_value=cap):
+        out = pre._load_rgb_frames("/fake.mp4", max_frames=4)
+    assert out.shape[0] >= 1
+    # Short side should be RESIZE_SIDE (256), long side preserved proportionally
+    assert min(out.shape[1], out.shape[2]) == pre.RESIZE_SIDE
+    # Long side should be > RESIZE_SIDE for non-square aspect
+    assert max(out.shape[1], out.shape[2]) > pre.RESIZE_SIDE
+
+
+def test_load_rgb_frames_landscape_standard():
+    """Standard landscape video should also get short-side-256 resize."""
+    import cv2
+
+    cap = MagicMock()
+
+    def _get(prop):
+        return 30 if prop == cv2.CAP_PROP_FRAME_COUNT else 0
+
+    cap.get.side_effect = _get
+    landscape = _bgr_frame(480, 640)
+    cap.read.return_value = (True, landscape)
+    with patch("cv2.VideoCapture", return_value=cap):
+        out = pre._load_rgb_frames("/fake.mp4", max_frames=4)
+    assert out.shape[0] >= 1
+    assert min(out.shape[1], out.shape[2]) == pre.RESIZE_SIDE
+
+
+def test_preprocess_video_portrait_produces_correct_shape():
+    """Full pipeline with portrait frames should still produce (1,3,64,224,224)."""
+    # Portrait frames after short-side-256: 256x456 (h x w swapped for portrait)
+    frames = np.random.rand(64, 456, 256, 3).astype(np.float32) * 2 - 1
+    with (
+        patch.object(pre, "_load_rgb_frames", return_value=frames),
+        patch("app.services.preprocessing.os.unlink"),
+    ):
+        tensor = pre.preprocess_video(b"fake-portrait-bytes")
+    assert tensor.shape == (1, 3, 64, 224, 224)
+    assert tensor.dtype == torch.float32
+
+
+def test_load_rgb_frames_already_256():
+    """Frame already at 256x256 should not be resized."""
+    import cv2
+
+    cap = MagicMock()
+
+    def _get(prop):
+        return 10 if prop == cv2.CAP_PROP_FRAME_COUNT else 0
+
+    cap.get.side_effect = _get
+    img = _bgr_frame(256, 256)
+    cap.read.return_value = (True, img)
+    with patch("cv2.VideoCapture", return_value=cap):
+        out = pre._load_rgb_frames("/fake.mp4", max_frames=4)
+    assert out.shape[1] == 256 and out.shape[2] == 256

@@ -46,7 +46,7 @@ The MVP recognizes **single, isolated signs** from a **scenario-focused vocabula
                                 │                      │
                                 │       ↓              │
                                 │  Classification      │
-                                │  (48 MVP glosses)    │
+                                │  (856 glosses)       │
                                 └──────────┬───────────┘
                                            │
                                            │ writes/reads
@@ -217,11 +217,11 @@ The MVP recognizes **single, isolated signs** from a **scenario-focused vocabula
 
 **Tech:** PyTorch, Torchvision.
 
-**Goal:** Classify a **short video clip** of an isolated ASL sign into one of the trained gloss classes (48 MVP glosses for the deployed I3D model; broader vocabulary possible with other backbones).
+**Goal:** Classify a **short video clip** of an isolated ASL sign into one of the trained gloss classes (856 glosses for the deployed I3D v4 model).
 
 **Key files:**
 - `ml/i3d_msft/pytorch_i3d.py` – **Inception I3D** (deployed MVP model).
-- `ml/i3d_label_map_mvp-sft-full-v1.json` – 48-class MVP label map.
+- `ml/i3d_label_map_mvp-sft-full-v1.json` – 856-class label map (v4).
 - `ml/models/classifier.py` – `ASLVideoClassifier` (in-repo torchvision baseline).
 - `ml/config.py` – central configuration (data, model, training).
 - `ml/training/dataset.py` – `ASLVideoDataset` class.

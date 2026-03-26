@@ -5,4 +5,4 @@ metadata:
   namespace: eyehearu
 data:
   s3-bucket: "eye-hear-u-public-data-ca1"
-  model-s3-key: "models/i3d/modal/candidate-ac-eval-v2/mvp-sft-full-v1/best_model.pt"
+  model-s3-key: "models/i3d/modal/candidate-ac-eval-v4/20260325T001403Z/best_model.pt"
