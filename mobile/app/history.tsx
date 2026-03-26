@@ -187,3 +187,6 @@ const styles = StyleSheet.create({
   },
   clearButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
 });
+
+
+

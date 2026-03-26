@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     # S3 model source
     aws_s3_bucket: str = "eye-hear-u-public-data-ca1"
     aws_s3_region: str = "ca-central-1"
-    aws_s3_model_key: str = "models/i3d/modal/candidate-ac-eval-v2/mvp-sft-full-v1/best_model.pt"
-    aws_s3_train_csv_key: str = "processed/mvp/i3d/split_plans/candidate-ac-eval-v2/splits/train.csv"
+    aws_s3_model_key: str = "models/i3d/modal/candidate-ac-eval-v4/20260325T001403Z/best_model.pt"
+    aws_s3_train_csv_key: str = "processed/mvp/i3d/split_plans/candidate-ac-eval-v4/splits/train.csv"
 
     # CORS — allowed origins for the mobile app
     cors_origins: list[str] = ["*"]

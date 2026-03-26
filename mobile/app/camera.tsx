@@ -8,6 +8,8 @@ import {
   Platform,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import type { CameraType } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
 import * as Speech from "expo-speech";
 import { predictSign, type PredictionResult } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -34,6 +36,7 @@ export default function CameraScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [facing, setFacing] = useState<CameraType>("front");
   const cameraRef = useRef<CameraView>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const busy = isRecording || isProcessing;
@@ -75,6 +78,23 @@ export default function CameraScreen() {
     );
   }
 
+  const toggleCamera = () => {
+    setFacing((prev) => (prev === "front" ? "back" : "front"));
+  };
+
+  const handlePredictionResult = async (result: PredictionResult) => {
+    setPrediction(result.sign);
+    setConfidence(result.confidence);
+    setTopK(result.top_k || []);
+
+    if (result.sign) {
+      await saveToHistory(result);
+      if (result.confidence > 0.3) {
+        Speech.speak(result.sign, { language: "en-US", rate: 0.9 });
+      }
+    }
+  };
+
   const recordAndPredict = async () => {
     if (!cameraRef.current || busy) return;
 
@@ -93,16 +113,7 @@ export default function CameraScreen() {
 
       setIsProcessing(true);
       const result: PredictionResult = await predictSign(video.uri);
-      setPrediction(result.sign);
-      setConfidence(result.confidence);
-      setTopK(result.top_k || []);
-
-      if (result.sign) {
-        await saveToHistory(result);
-        if (result.confidence > 0.3) {
-          Speech.speak(result.sign, { language: "en-US", rate: 0.9 });
-        }
-      }
+      await handlePredictionResult(result);
     } catch (error) {
       console.error("Prediction failed:", error);
       const msg = error instanceof Error ? error.message : String(error);
@@ -111,6 +122,37 @@ export default function CameraScreen() {
       setConfidence(0);
       setTopK([]);
       setIsRecording(false);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const pickAndPredict = async () => {
+    if (busy) return;
+
+    setPrediction(null);
+    setTopK([]);
+    setErrorMessage(null);
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["videos"],
+        quality: 1,
+        videoMaxDuration: 10,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      setIsProcessing(true);
+      const predResult: PredictionResult = await predictSign(result.assets[0].uri);
+      await handlePredictionResult(predResult);
+    } catch (error) {
+      console.error("Upload prediction failed:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      setErrorMessage(msg);
+      setPrediction(null);
+      setConfidence(0);
+      setTopK([]);
     } finally {
       setIsProcessing(false);
     }
@@ -145,13 +187,45 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView ref={cameraRef} style={styles.camera} facing="front" mode="video" />
+      <CameraView ref={cameraRef} style={styles.camera} facing={facing} mode="video" />
+
+      {/* Recording guidance overlay — visible when idle */}
+      {!isRecording && !isProcessing && !prediction && !errorMessage && (
+        <View style={styles.guidanceOverlay} pointerEvents="none">
+          <View style={styles.guidanceSilhouette}>
+            <View style={styles.silhouetteHead} />
+            <View style={styles.silhouetteBody} />
+          </View>
+          <Text style={styles.guidanceText}>
+            Center yourself in the frame{"\n"}Keep hands visible
+          </Text>
+        </View>
+      )}
+
+      {/* Camera toggle + upload buttons */}
+      <View style={styles.topControls}>
+        <TouchableOpacity
+          style={styles.topButton}
+          onPress={toggleCamera}
+          disabled={busy}
+        >
+          <Text style={styles.topButtonText}>{"\u{1F504}"}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.topButton}
+          onPress={pickAndPredict}
+          disabled={busy}
+        >
+          <Text style={styles.topButtonText}>{"\u{1F4C1}"}</Text>
+        </TouchableOpacity>
+      </View>
+
       {isRecording && (
         <View style={styles.recordingOverlay}>
           <Animated.View
             style={[styles.recordDot, { transform: [{ scale: pulseAnim }] }]}
           />
-          <Text style={styles.recordingText}>Recording… hold the sign steady</Text>
+          <Text style={styles.recordingText}>Recording... hold the sign steady</Text>
         </View>
       )}
 
@@ -159,7 +233,7 @@ export default function CameraScreen() {
         {isProcessing ? (
           <View style={styles.processingRow}>
             <Text style={styles.processingEmoji}>{"\u{1F914}"}</Text>
-            <Text style={styles.processingText}>Analyzing sign…</Text>
+            <Text style={styles.processingText}>Analyzing sign...</Text>
           </View>
         ) : errorMessage ? (
           <View style={styles.errorBox}>
@@ -205,27 +279,27 @@ export default function CameraScreen() {
         )}
       </View>
 
-      <TouchableOpacity
-        style={[
-          styles.captureButton,
-          isRecording && styles.captureButtonRecording,
-          isProcessing && styles.captureButtonDisabled,
-        ]}
-        onPress={isRecording ? stopRecording : recordAndPredict}
-        disabled={isProcessing}
-        activeOpacity={0.8}
-      >
-        {isRecording && (
-          <View style={styles.stopIcon} />
-        )}
-        <Text style={styles.captureButtonText}>
-          {isProcessing
-            ? "Processing…"
-            : isRecording
-            ? "  Stop"
-            : "Record Sign"}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.bottomControls}>
+        <TouchableOpacity
+          style={[
+            styles.captureButton,
+            isRecording && styles.captureButtonRecording,
+            isProcessing && styles.captureButtonDisabled,
+          ]}
+          onPress={isRecording ? stopRecording : recordAndPredict}
+          disabled={isProcessing}
+          activeOpacity={0.8}
+        >
+          {isRecording && <View style={styles.stopIcon} />}
+          <Text style={styles.captureButtonText}>
+            {isProcessing
+              ? "Processing..."
+              : isRecording
+              ? "  Stop"
+              : "Record Sign"}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -233,6 +307,62 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   camera: { flex: 1 },
+  /* --- Guidance overlay --- */
+  guidanceOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  guidanceSilhouette: {
+    alignItems: "center",
+    opacity: 0.25,
+    marginBottom: 12,
+  },
+  silhouetteHead: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: "#fff",
+    marginBottom: 4,
+  },
+  silhouetteBody: {
+    width: 100,
+    height: 80,
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    borderWidth: 2,
+    borderColor: "#fff",
+    borderBottomWidth: 0,
+  },
+  guidanceText: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  /* --- Top controls (camera toggle + upload) --- */
+  topControls: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 16 : 12,
+    right: 16,
+    flexDirection: "row",
+    gap: 10,
+  },
+  topButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  topButtonText: { fontSize: 20 },
+  /* --- Recording overlay --- */
   recordingOverlay: {
     position: "absolute",
     top: Platform.OS === "ios" ? 16 : 12,
@@ -252,6 +382,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   recordingText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  /* --- Result container --- */
   resultContainer: {
     backgroundColor: "#fff",
     paddingVertical: 18,
@@ -310,7 +441,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   instructionText: { fontSize: 16, color: BRAND.textMuted, textAlign: "center" },
+  /* --- Bottom controls --- */
+  bottomControls: {
+    flexDirection: "row",
+  },
   captureButton: {
+    flex: 1,
     backgroundColor: BRAND.teal,
     paddingVertical: 18,
     alignItems: "center",

@@ -9,39 +9,39 @@ from app.services.preprocessing import (
     _ensure_both_sides_at_least,
     TOTAL_FRAMES,
     CROP_SIZE,
-    MAX_SIDE,
+    RESIZE_SIDE,
 )
 
 
 def test_pad_frames_short_video():
-    imgs = np.random.rand(10, MAX_SIDE, MAX_SIDE, 3).astype(np.float32)
+    imgs = np.random.rand(10, RESIZE_SIDE, RESIZE_SIDE, 3).astype(np.float32)
     padded = _pad_frames(imgs, TOTAL_FRAMES)
-    assert padded.shape == (TOTAL_FRAMES, MAX_SIDE, MAX_SIDE, 3)
+    assert padded.shape == (TOTAL_FRAMES, RESIZE_SIDE, RESIZE_SIDE, 3)
     np.testing.assert_array_equal(padded[:10], imgs)
     np.testing.assert_array_equal(padded[10], imgs[-1])
 
 
 def test_pad_frames_exact():
-    imgs = np.random.rand(TOTAL_FRAMES, MAX_SIDE, MAX_SIDE, 3).astype(np.float32)
+    imgs = np.random.rand(TOTAL_FRAMES, RESIZE_SIDE, RESIZE_SIDE, 3).astype(np.float32)
     padded = _pad_frames(imgs, TOTAL_FRAMES)
-    assert padded.shape == (TOTAL_FRAMES, MAX_SIDE, MAX_SIDE, 3)
+    assert padded.shape == (TOTAL_FRAMES, RESIZE_SIDE, RESIZE_SIDE, 3)
     np.testing.assert_array_equal(padded, imgs)
 
 
 def test_pad_frames_long_video():
-    imgs = np.random.rand(100, MAX_SIDE, MAX_SIDE, 3).astype(np.float32)
+    imgs = np.random.rand(100, RESIZE_SIDE, RESIZE_SIDE, 3).astype(np.float32)
     padded = _pad_frames(imgs, TOTAL_FRAMES)
-    assert padded.shape == (TOTAL_FRAMES, MAX_SIDE, MAX_SIDE, 3)
+    assert padded.shape == (TOTAL_FRAMES, RESIZE_SIDE, RESIZE_SIDE, 3)
 
 
 def test_pad_frames_empty():
-    imgs = np.zeros((0, MAX_SIDE, MAX_SIDE, 3), dtype=np.float32)
+    imgs = np.zeros((0, RESIZE_SIDE, RESIZE_SIDE, 3), dtype=np.float32)
     padded = _pad_frames(imgs, TOTAL_FRAMES)
-    assert padded.shape == (TOTAL_FRAMES, MAX_SIDE, MAX_SIDE, 3)
+    assert padded.shape == (TOTAL_FRAMES, RESIZE_SIDE, RESIZE_SIDE, 3)
 
 
 def test_center_crop():
-    imgs = np.random.rand(TOTAL_FRAMES, MAX_SIDE, MAX_SIDE, 3).astype(np.float32)
+    imgs = np.random.rand(TOTAL_FRAMES, RESIZE_SIDE, RESIZE_SIDE, 3).astype(np.float32)
     cropped = _center_crop(imgs, CROP_SIZE)
     assert cropped.shape == (TOTAL_FRAMES, CROP_SIZE, CROP_SIZE, 3)
 
@@ -72,3 +72,24 @@ def test_center_crop_raises_if_too_small():
     imgs = np.zeros((2, 100, 100, 3), dtype=np.float32)
     with pytest.raises(ValueError, match="smaller than crop"):
         _center_crop(imgs, CROP_SIZE)
+
+
+def test_center_crop_portrait_rectangle():
+    """Center crop on a tall portrait frame (256x456) should work and center."""
+    imgs = np.random.rand(4, 456, 256, 3).astype(np.float32)
+    cropped = _center_crop(imgs, CROP_SIZE)
+    assert cropped.shape == (4, CROP_SIZE, CROP_SIZE, 3)
+
+
+def test_center_crop_landscape_rectangle():
+    """Center crop on a wide landscape frame (256x456) should work."""
+    imgs = np.random.rand(4, 256, 456, 3).astype(np.float32)
+    cropped = _center_crop(imgs, CROP_SIZE)
+    assert cropped.shape == (4, CROP_SIZE, CROP_SIZE, 3)
+
+
+def test_pad_frames_preserves_spatial_dimensions():
+    """Pad frames should keep non-square spatial dims intact."""
+    imgs = np.random.rand(10, 300, 256, 3).astype(np.float32)
+    padded = _pad_frames(imgs, TOTAL_FRAMES)
+    assert padded.shape == (TOTAL_FRAMES, 300, 256, 3)

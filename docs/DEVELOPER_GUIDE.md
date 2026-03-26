@@ -9,7 +9,7 @@ Repository layout, how to run each component, and where to change behavior.
 | `mobile/` | Expo (React Native) app — UI, camera, API client, local history |
 | `backend/` | FastAPI inference API — loads I3D, `/predict`, health checks |
 | `ml/i3d_msft/` | **Inception I3D** model code (must match the training branch) |
-| `ml/i3d_label_map_mvp-sft-full-v1.json` | Class index ↔ gloss (48 MVP signs) |
+| `ml/i3d_label_map_mvp-sft-full-v1.json` | Class index ↔ gloss (856 signs, v4) |
 | `infrastructure/` | Terraform (S3, ECS, Batch, etc.) |
 | `data/scripts/` | Data pipeline scripts |
 | `docs/` | Documentation (this file, testing, production, preprocessing) |

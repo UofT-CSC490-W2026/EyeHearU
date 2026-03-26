@@ -51,28 +51,70 @@ pytest tests/ --cov=app --cov-report=xml
 | Model service | `test_model_service.py`, `test_model_service_coverage.py` — label map formats, S3 download mock, `load_model`, `predict`, `sys.path` insert |
 | Firebase | `test_firebase_service.py` — mocked `firebase_admin` |
 
-**Total:** 54 tests, **100%** line and branch coverage on `app/` as configured.
+**Total:** 66 tests, **100%** line and branch coverage on `app/` as configured.
+
+## ML (pytest)
+
+ML tests live in **`ml/tests/`**. They cover the model classifier, config, dataset, evaluation utilities, and video transforms.
+
+### Run tests locally
+
+```bash
+cd ml
+python -m pytest tests/ -v
+```
+
+**Total:** 73 tests.
+
+## Mobile (Jest + jest-expo)
+
+Mobile tests live in **`mobile/__tests__/`**. Configuration is in `mobile/package.json` (`"preset": "jest-expo"`).
+
+### Run tests locally
+
+```bash
+cd mobile
+npx jest --coverage
+```
+
+### What is tested
+
+| Area | Tests |
+|------|--------|
+| API service | `api.test.ts` — `isTunnelUnavailable`, `explainApiFailure`, `predictSign`, `checkHealth`, `resolveApiBaseUrl` branches |
+| Camera screen | `camera.test.tsx` — permissions, recording flow, upload flow, camera toggle, error handling, prediction display, TTS |
+| History screen | `history.test.tsx` — empty state, history rendering, `timeAgo` formatting, clear history flow, AsyncStorage errors |
+
+**Total:** 59 tests, **100%** line and function coverage.
 
 ## Continuous Integration (GitHub Actions)
 
 Workflow: **`.github/workflows/ci.yml`**
 
-On every **push** and **pull_request** to `main` or `master`:
+On every **push** and **pull_request** to `main` or `master`, three jobs run in parallel:
 
-1. Checks out the repo  
-2. Sets up Python **3.11**  
-3. `pip install -r backend/requirements.txt`  
-4. Runs `pytest` with `PYTHONPATH=$GITHUB_WORKSPACE`  
-5. Fails the job if coverage **&lt; 100%**  
-6. Uploads **`backend/coverage.xml`** to **Codecov** (if `CODECOV_TOKEN` is set)  
-7. Prints a **coverage table** in the GitHub Actions job summary  
+### Backend job
+1. Sets up Python **3.11**
+2. `pip install -r backend/requirements.txt`
+3. Runs `pytest` — fails if coverage **< 100%**
+4. Uploads `backend/coverage.xml` to Codecov
+
+### ML job
+1. Sets up Python **3.11**
+2. `pip install -r ml/requirements.txt` + pytest-cov
+3. Runs `pytest` with coverage on `models`, `evaluation`, `training`, `i3d_msft`, `config`
+
+### Mobile job
+1. Sets up Node.js **20**
+2. `npm ci`
+3. Runs `npx jest --coverage --ci`
 
 ### Codecov setup (README badge + PR comments)
 
-1. Sign in at [codecov.io](https://about.codecov.io/) with GitHub.  
-2. Enable the **EyeHearU** repository.  
-3. In GitHub: **Settings → Secrets and variables → Actions** → add **`CODECOV_TOKEN`**.  
-4. Open a PR — Codecov comments with diff coverage after the first upload.  
+1. Sign in at [codecov.io](https://about.codecov.io/) with GitHub.
+2. Enable the **EyeHearU** repository.
+3. In GitHub: **Settings → Secrets and variables → Actions** → add **`CODECOV_TOKEN`**.
+4. Open a PR — Codecov comments with diff coverage after the first upload.
 
 The README badge URL:
 
@@ -82,13 +124,4 @@ The README badge URL:
 
 ### Without Codecov
 
-CI still passes or fails on **`--cov-fail-under=100`**. The external badge and PR bot are omitted until `CODECOV_TOKEN` is configured.
-
-## Mobile tests (optional extension)
-
-The current CI gate is **backend coverage**. To add Expo / React Native tests later:
-
-- `jest` + `@testing-library/react-native` for components  
-- Detox / Maestro for E2E  
-
-Not required for the existing backend CI workflow.
+CI still passes or fails on **`--cov-fail-under=100`** (backend). The external badge and PR bot are omitted until `CODECOV_TOKEN` is configured.

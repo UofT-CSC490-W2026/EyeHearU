@@ -45,7 +45,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
                                        │    3D CNN)          │
                                        │        ↓            │
                                        │   Classification    │
-                                       │   (MVP gloss set)   │
+                                       │   (856 glosses)     │
                                        └─────────────────────┘
 
   ┌─────────────────────┐   ┌────────────────────┐   ┌──────────────────┐
@@ -77,11 +77,12 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 │   │   ├── routers/          # health.py, predict.py
 │   │   ├── schemas/          # Pydantic models
 │   │   └── services/         # model_service, preprocessing, firebase
-│   ├── tests/                # 54 tests, 100% coverage
+│   ├── tests/                # 66 tests, 100% coverage
 │   └── requirements.txt
 │
 ├── mobile/                   # React Native (Expo) mobile app
 │   ├── app/                  # _layout, index, camera, history
+│   ├── __tests__/            # 59 tests, 100% line coverage
 │   ├── services/api.ts
 │   └── package.json
 │
@@ -89,7 +90,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 │   ├── i3d_msft/             # Inception I3D (deployed model)
 │   │   ├── pytorch_i3d.py
 │   │   └── videotransforms.py
-│   ├── i3d_label_map_mvp-sft-full-v1.json  # 48-class MVP label map
+│   ├── i3d_label_map_mvp-sft-full-v1.json  # 856-class label map (v4)
 │   ├── models/classifier.py  # ASLVideoClassifier (in-repo baseline)
 │   ├── config.py             # Video classifier config
 │   ├── training/
@@ -97,7 +98,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 │   │   └── dataset.py        # ASLVideoDataset (PyTorch)
 │   ├── evaluation/
 │   │   └── evaluate.py       # Accuracy, F1, confusion matrix, latency
-│   ├── tests/                # ML unit tests
+│   ├── tests/                # 73 ML unit tests
 │   └── requirements.txt
 │
 ├── data/                     # Data pipeline

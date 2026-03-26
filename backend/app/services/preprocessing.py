@@ -5,7 +5,7 @@ while staying aligned with training (ASL Citizen / I3D dataloader).
 ## Training data vs. app users
 
 - **ASL Citizen (training)** clips are preprocessed dataset videos: mostly **fixed aspect**
-  and resolution bands from the official pipeline; frames are already “hand-sized” in the
+  and resolution bands from the official pipeline; frames are already "hand-sized" in the
   frame after ingest.
 - **App users (iOS / Expo)** record with **rear or front camera**, often **1080p or 4K**,
   **portrait (9:16)** or **landscape**, **HEVC/H.264**, and **~3 s** clips at **30–60 fps**.
@@ -15,13 +15,14 @@ while staying aligned with training (ASL Citizen / I3D dataloader).
 ## Pipeline (order matters)
 
 1. Decode with OpenCV; **optional coarse downscale** if either side exceeds
-   ``MOBILE_MAX_LONG_SIDE`` so 4K/8K frames don’t waste memory or amplify codec quirks.
+   ``MOBILE_MAX_LONG_SIDE`` so 4K/8K frames don't waste memory or amplify codec quirks.
 2. Same **temporal** logic as ``ml/i3d_msft/dataset.py``: adaptive frame skip, centered
    window (matches short phone clips).
-3. Per frame, **training-style spatial** rules: min side **226**, max side **256**
-   (then RGB, normalize to **[-1, 1]**).
-4. Pad / trim to **64** frames; **ensure both H and W ≥ 224** (mobile can leave one side
-   too small after the max-256 cap on panoramic aspect ratios — breaks center-crop + I3D).
+3. Per frame, **short-side-256** resize: scale so the shorter dimension equals
+   ``RESIZE_SIDE`` (256), preserving aspect ratio.  Then RGB, normalize to **[-1, 1]**.
+   This replaces the former min-226 / max-256 sequential logic which destroyed spatial
+   detail on portrait (9:16) phone video by collapsing width to ~144 px.
+4. Pad / trim to **64** frames.
 5. **Center-crop 224×224** (eval-style).
 6. Tensor **(1, 3, 64, 224, 224)**.
 
@@ -39,13 +40,12 @@ import torch
 # --- Temporal (match training dataloader) ---
 TOTAL_FRAMES = 64
 
-# --- Spatial (match training clip loader) ---
+# --- Spatial ---
 CROP_SIZE = 224
-MIN_SIDE = 226
-MAX_SIDE = 256
+RESIZE_SIDE = 256  # resize short side to this before center-crop
 
 # --- Mobile / iPhone: cap extreme sensor resolution before training-style scaling ---
-# iPhone 4K vertical is 2160 px tall; we don’t need full-res for a 224×224 model input.
+# iPhone 4K vertical is 2160 px tall; we don't need full-res for a 224×224 model input.
 MOBILE_MAX_LONG_SIDE = 1280
 
 
@@ -74,7 +74,7 @@ def _load_rgb_frames(video_path: str, max_frames: int = TOTAL_FRAMES) -> np.ndar
 
     if total <= 0:
         cap.release()
-        return np.zeros((0, MAX_SIDE, MAX_SIDE, 3), dtype=np.float32)
+        return np.zeros((0, RESIZE_SIDE, RESIZE_SIDE, 3), dtype=np.float32)
 
     frameskip = 1
     if total >= 96:
@@ -101,7 +101,7 @@ def _load_rgb_frames(video_path: str, max_frames: int = TOTAL_FRAMES) -> np.ndar
 
         h, w = img.shape[:2]
 
-        # --- Mobile: tame 4K / very large captures before training-style min/max rules ---
+        # --- Mobile: tame 4K / very large captures before resize ---
         long_side = max(h, w)
         if long_side > MOBILE_MAX_LONG_SIDE:
             scale = MOBILE_MAX_LONG_SIDE / float(long_side)
@@ -110,18 +110,18 @@ def _load_rgb_frames(video_path: str, max_frames: int = TOTAL_FRAMES) -> np.ndar
             img = _resize_bgr_uint8(img, nw, nh, shrinking=True)
             h, w = img.shape[:2]
 
-        if min(h, w) < MIN_SIDE:
-            sc = 1.0 + (MIN_SIDE - float(min(h, w))) / float(min(h, w))
-            nw = int(math.ceil(w * sc))
-            nh = int(math.ceil(h * sc))
-            img = _resize_bgr_uint8(img, nw, nh, shrinking=False)
-            h, w = img.shape[:2]
-
-        if h > MAX_SIDE or w > MAX_SIDE:
-            scale = min(MAX_SIDE / float(h), MAX_SIDE / float(w))
+        # --- Short-side-256 resize ---
+        # Scale so the shorter dimension equals RESIZE_SIDE, preserving aspect
+        # ratio.  This avoids the old min-226/max-256 bottleneck that crushed
+        # portrait (9:16) video width to ~144 px.  The model was trained on
+        # ~256-scale frames center-cropped to 224; this produces the same
+        # spatial scale regardless of aspect ratio.
+        short = min(h, w)
+        if short != RESIZE_SIDE:
+            scale = RESIZE_SIDE / float(short)
             nw = max(1, int(math.ceil(w * scale)))
             nh = max(1, int(math.ceil(h * scale)))
-            img = _resize_bgr_uint8(img, nw, nh, shrinking=True)
+            img = _resize_bgr_uint8(img, nw, nh, shrinking=(scale < 1.0))
             h, w = img.shape[:2]
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -129,7 +129,7 @@ def _load_rgb_frames(video_path: str, max_frames: int = TOTAL_FRAMES) -> np.ndar
         frames.append(img.astype(np.float32))
 
     cap.release()
-    return np.asarray(frames, dtype=np.float32) if frames else np.zeros((0, MAX_SIDE, MAX_SIDE, 3), dtype=np.float32)
+    return np.asarray(frames, dtype=np.float32) if frames else np.zeros((0, RESIZE_SIDE, RESIZE_SIDE, 3), dtype=np.float32)
 
 
 def _pad_frames(imgs: np.ndarray, total_frames: int = TOTAL_FRAMES) -> np.ndarray:
@@ -137,7 +137,7 @@ def _pad_frames(imgs: np.ndarray, total_frames: int = TOTAL_FRAMES) -> np.ndarra
     if imgs.shape[0] >= total_frames:
         return imgs[:total_frames]
     if imgs.shape[0] == 0:
-        return np.zeros((total_frames, MAX_SIDE, MAX_SIDE, 3), dtype=np.float32)
+        return np.zeros((total_frames, RESIZE_SIDE, RESIZE_SIDE, 3), dtype=np.float32)
     pad = np.tile(imgs[-1:], (total_frames - imgs.shape[0], 1, 1, 1))
     return np.concatenate([imgs, pad], axis=0)
 
@@ -203,7 +203,6 @@ def preprocess_video(video_bytes: bytes) -> torch.Tensor:
         raise ValueError("Video has no decodable frames")
 
     imgs = _pad_frames(imgs, TOTAL_FRAMES)
-    imgs = _ensure_both_sides_at_least(imgs, CROP_SIZE)
     imgs = _center_crop(imgs, CROP_SIZE)
 
     # (T, H, W, C) -> (C, T, H, W) -> (1, C, T, H, W)
