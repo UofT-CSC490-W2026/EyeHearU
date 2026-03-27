@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     model_path: str = "model_cache/best_model.pt"
     label_map_path: str = "../ml/i3d_label_map_mvp-sft-full-v1.json"
     model_device: str = "cpu"  # "cpu" or "cuda" or "mps"
+    # Gloss bigram LM for multi-clip sentence decoding (relative to backend app root)
+    gloss_lm_path: str = "data/gloss_lm.json"
 
     # S3 model source
     aws_s3_bucket: str = "eye-hear-u-public-data-ca1"

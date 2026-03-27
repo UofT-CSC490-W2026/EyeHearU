@@ -47,12 +47,14 @@ pytest tests/ --cov=app --cov-report=xml
 | Lifespan / startup | `test_main_lifespan.py` — model load OK, `FileNotFoundError`, generic `Exception` |
 | Health | `test_health.py` — `/health`, `/ready` |
 | Predict API | `test_predict.py`, `test_predict_extra.py` — empty file, non-video, 503, success, `ValueError`, inference errors, empty `top_k` |
+| Predict sentence | `test_predict_sentence.py` — `POST /predict/sentence` multi-clip, beam + LM, limits, 503, errors |
+| Beam + gloss LM | `test_beam_search.py`, `test_gloss_lm.py` — beam decode, bigram LM, uniform fallback |
 | Preprocessing | `test_preprocessing.py`, `test_preprocessing_coverage.py` — pad/crop helpers, cv2 branches, `preprocess_video`, ImportError path |
 | Preprocessing (depth) | `test_preprocessing_depth.py` — 16 edge-case tests (10 positive, 6 negative): portrait 9:16 spatial preservation, 4K downscale, single-frame padding, [-1,1] normalization, frameskip adaptation, square aspect, center-crop geometry, interpolation selection, zero-frame error, all-reads-fail, undersized crop, missing opencv, temp file cleanup, codec crash propagation |
-| Model service | `test_model_service.py`, `test_model_service_coverage.py` — label map formats, S3 download mock, `load_model`, `predict`, `sys.path` insert |
+| Model service | `test_model_service.py`, `test_model_service_coverage.py` — label map formats, S3 download mock, `load_model`, `predict`, `predict_batch`, `sys.path` insert |
 | Firebase | `test_firebase_service.py` — mocked `firebase_admin` |
 
-**Total:** 82 tests, **100%** line and branch coverage on `app/` as configured.
+**Total:** 104 tests, **100%** line and branch coverage on `app/` as configured.
 
 ### Coverage depth: preprocessing module
 

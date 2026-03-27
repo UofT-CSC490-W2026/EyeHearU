@@ -95,7 +95,7 @@ The deployed model is **Microsoft's Inception I3D** (spatiotemporal 3D CNN), fin
 │   │   ├── routers/          # health.py, predict.py
 │   │   ├── schemas/          # Pydantic models
 │   │   └── services/         # model_service (I3D), preprocessing, firebase
-│   ├── tests/                # 82 tests, 100% coverage
+│   ├── tests/                # 100+ tests, 100% coverage
 │   └── requirements.txt
 │
 ├── mobile/                   # React Native (Expo) mobile app
@@ -197,6 +197,9 @@ Test the API:
 ```bash
 curl http://localhost:8000/health
 curl -X POST http://localhost:8000/api/v1/predict -F "file=@sample.mp4"
+# Multi-clip sentence (beam search + gloss LM): same field name `files` repeated
+curl -X POST "http://localhost:8000/api/v1/predict/sentence?beam_size=8&lm_weight=1" \
+  -F "files=@clip1.mp4" -F "files=@clip2.mp4"
 ```
 
 ### Mobile App
@@ -263,7 +266,7 @@ CI runs three parallel jobs on every push/PR to `main`:
 
 | Job | Tests | Coverage | Enforced |
 |-----|-------|----------|----------|
-| Backend | 82 pytest | 100% line + branch | `--cov-fail-under=100` |
+| Backend | 104 pytest | 100% line + branch | `--cov-fail-under=100` |
 | ML | 190+ pytest | 100% line | `--cov-fail-under=100` |
 | Mobile | 66 Jest | 100% line + function | Jest `coverageThreshold` in `package.json` |
 

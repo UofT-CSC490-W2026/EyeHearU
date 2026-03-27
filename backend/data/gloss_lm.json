@@ -1,0 +1,18 @@
+{
+  "alpha": 1.0,
+  "bigram_counts": {
+    "<s>|||hello": 80,
+    "<s>|||thanks": 40,
+    "hello|||thanks": 35,
+    "hello|||water": 20,
+    "thanks|||water": 25,
+    "thanks|||hello": 10,
+    "water|||hello": 5
+  },
+  "unigram_counts": {
+    "<s>": 120,
+    "hello": 90,
+    "thanks": 70,
+    "water": 55
+  }
+}

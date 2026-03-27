@@ -1,14 +1,22 @@
 """
 Prediction endpoint.
 Accepts video (mp4) upload and returns predicted ASL sign label(s).
+Multi-clip sentence decoding uses batched I3D inference + beam search over gloss LM.
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Request
-from app.schemas.prediction import PredictionResponse
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Query
+from app.schemas.prediction import (
+    PredictionResponse,
+    SentenceBeamRow,
+    SentenceClipResult,
+    SentencePredictionResponse,
+    TopKPrediction,
+)
 
 router = APIRouter()
 
 VIDEO_TYPES = ("video/mp4", "video/quicktime", "application/octet-stream")
+MAX_SENTENCE_CLIPS = 12
 
 
 @router.post("/predict", response_model=PredictionResponse)
@@ -58,4 +66,110 @@ async def predict_sign(request: Request, file: UploadFile = File(...)):
         sign=top_1["sign"],
         confidence=top_1["confidence"],
         top_k=results,
+    )
+
+
+def _is_video_upload(file: UploadFile, contents: bytes) -> bool:
+    return (
+        file.content_type in VIDEO_TYPES
+        or (file.filename or "").lower().endswith((".mp4", ".mov"))
+    ) and len(contents) > 0
+
+
+@router.post("/predict/sentence", response_model=SentencePredictionResponse)
+async def predict_sentence(
+    request: Request,
+    files: list[UploadFile] = File(..., description="Ordered clips (one sign per file)"),
+    beam_size: int = Query(8, ge=1, le=32),
+    lm_weight: float = Query(1.0, ge=0.0, le=10.0),
+    top_k: int = Query(5, ge=1, le=20),
+):
+    """
+    Upload **multiple** video clips in order. Each clip is classified (top-k);
+    then beam search + gloss bigram LM picks a high-scoring gloss sequence.
+
+    Query params: ``beam_size``, ``lm_weight`` (LM vs model balance), ``top_k`` per clip.
+    """
+    if len(files) > MAX_SENTENCE_CLIPS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"At most {MAX_SENTENCE_CLIPS} clips per request (got {len(files)}).",
+        )
+
+    model = getattr(request.app.state, "model", None)
+    index_to_gloss = getattr(request.app.state, "index_to_gloss", None)
+    gloss_lm = getattr(request.app.state, "gloss_lm", None)
+    if model is None or index_to_gloss is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model not loaded. Check server logs.",
+        )
+
+    from app.services.gloss_lm import load_gloss_lm
+
+    if gloss_lm is None:
+        gloss_lm = load_gloss_lm(None, index_to_gloss)
+
+    raw_blobs: list[bytes] = []
+    for f in files:
+        contents = await f.read()
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded.")
+        if not _is_video_upload(f, contents):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Upload videos only (mp4/mov). Got content_type={f.content_type}",
+            )
+        raw_blobs.append(contents)
+
+    try:
+        from app.services.preprocessing import preprocess_video
+        from app.services.model_service import predict_batch
+        from app.services.beam_search import beam_search
+        from app.config import get_settings
+
+        tensors = [preprocess_video(blob) for blob in raw_blobs]
+        clip_hyps = predict_batch(
+            model,
+            index_to_gloss,
+            tensors,
+            top_k=top_k,
+            device=get_settings().model_device,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Inference error: {e}")
+
+    beams = beam_search(
+        clip_hyps,
+        gloss_lm,
+        beam_size=beam_size,
+        lm_weight=lm_weight,
+        top_sequences=5,
+    )
+
+    clips_out = [
+        SentenceClipResult(
+            top_k=[TopKPrediction(sign=x["sign"], confidence=x["confidence"]) for x in h]
+        )
+        for h in clip_hyps
+    ]
+    beam_rows = [
+        SentenceBeamRow(
+            glosses=list(b.glosses),
+            score=round(b.score, 4),
+            english=" ".join(b.glosses),
+        )
+        for b in beams
+    ]
+    best = beams[0] if beams else None
+    best_glosses = list(best.glosses) if best else []
+    english = " ".join(best_glosses)
+
+    return SentencePredictionResponse(
+        clips=clips_out,
+        beam=beam_rows,
+        best_glosses=best_glosses,
+        english=english,
     )

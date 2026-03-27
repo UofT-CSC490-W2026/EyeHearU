@@ -90,10 +90,10 @@ npx jest --coverage
 
 | Component | Tests | Line coverage | Branch coverage |
 |-----------|-------|---------------|-----------------|
-| Backend (`app/`) | 82 pytest | **100%** | **100%** |
+| Backend (`app/`) | 104 pytest | **100%** | **100%** |
 | ML (`i3d_msft/`, `modal_train_i3d`) | 191 pytest | **100%** | — |
 | Mobile (`app/`, `services/`) | 66 Jest | **100%** | — |
-| **Total** | **339 tests** | **100%** on each component’s measured tree | |
+| **Total** | **361 tests** | **100%** on each component’s measured tree | |
 
 Mobile Jest also enforces **100% function** coverage on those paths (`coverageThreshold` in `mobile/package.json`).
 
@@ -101,8 +101,8 @@ Coverage is enforced in CI with `--cov-fail-under=100` for backend and ML, and J
 
 ### What is covered
 
-**Backend (82 tests):**
-- API endpoints: `/health`, `/ready`, `POST /api/v1/predict`
+**Backend (104 tests):**
+- API endpoints: `/health`, `/ready`, `POST /api/v1/predict`, `POST /api/v1/predict/sentence` (multi-clip + beam + gloss LM)
 - Video preprocessing: frame decode, resize, crop, normalize, pad, temporal sampling
 - Model service: S3 download, label map loading, inference, top-k predictions
 - Lifespan: model load success/failure, startup error handling
