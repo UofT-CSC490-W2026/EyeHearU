@@ -1,322 +1,533 @@
 """
-Part 3: RL Run Analysis — reward curves, eval curves, and GSM8K problem clustering.
+Part 3 Analysis: GSM8K problem clustering, reward/eval curves, and EDA.
+
+Produces all plots and tables needed for A4 report sections 3.1 and 3.2.
 
 Usage:
-    cd a4/part3
-    pip install matplotlib pandas datasets
-    python analysis.py
+    1. Run the detailed eval on Modal first:
+           cd a4/nanochat-modal
+           uv run modal run nanochat_modal.py::stage_gsm8k_detailed_eval
+
+    2. Download the JSON results:
+           modal volume get nanochat-vol nanochat_cache/report/gsm8k_detailed_sft.json data/gsm8k_detailed_sft.json
+           modal volume get nanochat-vol nanochat_cache/report/gsm8k_detailed_rl.json  data/gsm8k_detailed_rl.json
+
+    3. Run this script:
+           cd a4/part3
+           python analysis.py
+
+    Plots are saved to the plots/ directory.
+
+Optional: Set WANDB_ENTITY and WANDB_RL_RUN_ID at the top to pull training
+curves from W&B automatically. Otherwise the script uses the detailed eval
+JSON files only.
 """
-import re
+
 import json
 import os
+import re
+from collections import Counter, defaultdict
+
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import pandas as pd
 import numpy as np
 
-TERMINAL_LOG = os.path.expanduser(
-    "~/.cursor/projects/Users-chloe-csc490-EyeHearU/terminals/559760.txt"
-)
-OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
+# ─── Configuration ───────────────────────────────────────────────────────────
+PLOTS_DIR = "plots"
+DATA_DIR = "data"
+SFT_JSON = os.path.join(DATA_DIR, "gsm8k_detailed_sft.json")
+RL_JSON = os.path.join(DATA_DIR, "gsm8k_detailed_rl.json")
 
-# ─── 1. Extract step-level reward data from terminal log ─────────────────────
+# W&B settings (optional — set these to pull training curves automatically)
+WANDB_ENTITY = None       # e.g. "maria-shurui-ma"
+WANDB_PROJECT = "nanochat-rl"
+WANDB_RL_RUN_ID = None    # e.g. "abc123xyz" — find this in the W&B URL
 
-def extract_step_rewards(log_path):
-    pattern = re.compile(
-        r"Step (\d+)/467 \| Average reward: ([\d.]+) \| Average sequence length: ([\d.]+)"
-    )
-    rows = []
-    with open(log_path, "r", errors="replace") as f:
-        for line in f:
-            m = pattern.search(line)
-            if m:
-                rows.append({
-                    "step": int(m.group(1)),
-                    "reward": float(m.group(2)),
-                    "seq_len": float(m.group(3)),
-                })
-    return pd.DataFrame(rows)
+os.makedirs(PLOTS_DIR, exist_ok=True)
 
-# ─── 2. Plot reward curve ────────────────────────────────────────────────────
+# ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def plot_reward_curve(df):
-    fig, ax1 = plt.subplots(figsize=(12, 5))
+def load_json(path):
+    with open(path) as f:
+        return json.load(f)
 
-    window = 20
-    df["reward_smooth"] = df["reward"].rolling(window, min_periods=1).mean()
 
-    ax1.plot(df["step"], df["reward"], alpha=0.2, color="blue", label="Raw reward")
-    ax1.plot(df["step"], df["reward_smooth"], color="blue", linewidth=2, label=f"Smoothed (window={window})")
-    ax1.set_xlabel("RL Step")
-    ax1.set_ylabel("Average Reward", color="blue")
-    ax1.set_title("RL Training: Reward Curve (GRPO on GSM8K)")
-    ax1.legend(loc="upper left")
-    ax1.grid(True, alpha=0.3)
+DOMAIN_KEYWORDS = {
+    "money/shopping": ["dollar", "price", "cost", "pay", "earn", "spend",
+                       "bought", "sold", "profit", "discount", "sale", "store",
+                       "shop", "money", "wage", "salary", "budget", "cheap",
+                       "expensive", "cent", "fee", "charge", "bill", "tax"],
+    "time": ["hour", "minute", "second", "day", "week", "month", "year",
+             "time", "clock", "schedule", "duration", "morning", "evening"],
+    "food/cooking": ["recipe", "cook", "bake", "ingredient", "cake", "pie",
+                     "cookie", "bread", "pizza", "chicken", "egg", "cup",
+                     "tablespoon", "ounce", "pound", "gallon", "liter"],
+    "distance/travel": ["mile", "kilometer", "drive", "walk", "run", "trip",
+                        "travel", "speed", "distance", "road", "car", "bus"],
+    "people/age": ["age", "old", "young", "birthday", "born", "people",
+                   "friend", "family", "student", "class", "teacher"],
+    "counting/inventory": ["many", "total", "number", "count", "remain",
+                           "left", "collect", "gather", "box", "bag", "pack"],
+}
 
-    ax2 = ax1.twinx()
-    ax2.plot(df["step"], df["seq_len"], alpha=0.4, color="red", linewidth=1)
-    ax2.set_ylabel("Average Sequence Length", color="red")
 
-    plt.tight_layout()
-    path = os.path.join(OUTPUT_DIR, "reward_curve.png")
-    plt.savefig(path, dpi=150)
-    plt.close()
-    print(f"Saved {path}")
+def classify_domain(question):
+    q_lower = question.lower()
+    scores = {}
+    for domain, keywords in DOMAIN_KEYWORDS.items():
+        scores[domain] = sum(1 for kw in keywords if kw in q_lower)
+    best = max(scores, key=scores.get)
+    if scores[best] == 0:
+        return "other"
+    return best
 
-# ─── 3. Plot pass@k eval curve ──────────────────────────────────────────────
 
-def plot_passk_curve():
-    """
-    Reconstruct pass@k from W&B sparkline: eval every 60 steps.
-    W&B summary: pass@1 ▂▇█▇▇▆▂▁  (8 eval points)
-    Final: pass@1=0.0125, pass@8=0.0425
-    """
-    eval_steps = [60, 120, 180, 240, 300, 360, 420, 466]
+def classify_num_steps(result):
+    return result.get("gt_num_tool_calls", 0)
 
-    sparkline_map = {"▁": 1, "▂": 2, "▃": 3, "▄": 4, "▅": 5, "▆": 6, "▇": 7, "█": 8}
 
-    def decode_sparkline(spark, final_val):
-        vals = [sparkline_map.get(c, 0) for c in spark]
-        max_v = max(vals) if vals else 1
-        return [v / max_v * (final_val / (vals[-1] / max_v)) if max_v else 0 for v in vals]
-
-    pass1_spark = "▂▇█▇▇▆▂▁"
-    pass8_spark = "▄▇█▇█▆▁▁"
-
-    pass1_final = 0.0125
-    pass8_final = 0.0425
-
-    pass1_raw = [sparkline_map.get(c, 0) for c in pass1_spark]
-    pass8_raw = [sparkline_map.get(c, 0) for c in pass8_spark]
-
-    pass1_max_idx = pass1_raw.index(max(pass1_raw))
-    pass8_max_idx = pass8_raw.index(max(pass8_raw))
-
-    pass1_peak = pass1_final * (max(pass1_raw) / pass1_raw[-1]) if pass1_raw[-1] else 0.05
-    pass8_peak = pass8_final * (max(pass8_raw) / pass8_raw[-1]) if pass8_raw[-1] else 0.15
-
-    pass1_values = [v / max(pass1_raw) * pass1_peak for v in pass1_raw]
-    pass8_values = [v / max(pass8_raw) * pass8_peak for v in pass8_raw]
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(eval_steps, pass1_values, "o-", color="blue", linewidth=2, markersize=6, label="pass@1")
-    ax.plot(eval_steps, pass8_values, "s-", color="green", linewidth=2, markersize=6, label="pass@8")
-
-    ax.axhline(y=0.0311, color="gray", linestyle="--", alpha=0.6, label="SFT baseline (GSM8K 3.11%)")
-
-    ax.set_xlabel("RL Step")
-    ax.set_ylabel("GSM8K Accuracy")
-    ax.set_title("RL Training: GSM8K pass@k Eval Curve")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    ax.set_ylim(bottom=0)
-
-    plt.tight_layout()
-    path = os.path.join(OUTPUT_DIR, "passk_curve.png")
-    plt.savefig(path, dpi=150)
-    plt.close()
-    print(f"Saved {path}")
-
-    return eval_steps, pass1_values, pass8_values
-
-# ─── 4. Benchmark comparison chart ──────────────────────────────────────────
-
-def plot_benchmark_comparison():
-    tasks = ["ARC-Easy", "ARC-Chall", "MMLU", "GSM8K", "HumanEval", "SpellingBee"]
-    pretrained = [25, 25, 25, 0, 0, 0]
-    after_sft = [36.15, 30.12, 31.39, 3.11, 8.54, 98.44]
-    after_rl = [32.07, 31.48, 28.79, 4.32, 0.0, 0.0]
-
-    x = np.arange(len(tasks))
-    width = 0.25
-
-    fig, ax = plt.subplots(figsize=(12, 6))
-    bars1 = ax.bar(x - width, pretrained, width, label="Pretrained", color="#9ecae1", edgecolor="black", linewidth=0.5)
-    bars2 = ax.bar(x, after_sft, width, label="After SFT", color="#4292c6", edgecolor="black", linewidth=0.5)
-    bars3 = ax.bar(x + width, after_rl, width, label="After RL", color="#08519c", edgecolor="black", linewidth=0.5)
-
-    ax.set_ylabel("Accuracy (%)")
-    ax.set_title("Benchmark Comparison: Pretrained → SFT → RL")
-    ax.set_xticks(x)
-    ax.set_xticklabels(tasks)
-    ax.legend()
-    ax.grid(True, alpha=0.3, axis="y")
-
-    for bars in [bars1, bars2, bars3]:
-        for bar in bars:
-            h = bar.get_height()
-            if h > 2:
-                ax.annotate(f"{h:.1f}%", xy=(bar.get_x() + bar.get_width() / 2, h),
-                            xytext=(0, 3), textcoords="offset points", ha="center", va="bottom", fontsize=7)
-
-    plt.tight_layout()
-    path = os.path.join(OUTPUT_DIR, "benchmark_comparison.png")
-    plt.savefig(path, dpi=150)
-    plt.close()
-    print(f"Saved {path}")
-
-# ─── 5. GSM8K problem analysis and clustering ───────────────────────────────
-
-def analyze_gsm8k_problems():
-    """Categorize GSM8K problems by mathematical operation type and difficulty."""
+def classify_answer_magnitude(result):
+    ans = result.get("gt_answer")
+    if ans is None:
+        return "unknown"
     try:
-        from datasets import load_dataset
-        ds = load_dataset("openai/gsm8k", "main", split="test")
-    except Exception:
-        print("Could not load GSM8K dataset, using manual categorization")
-        return None
+        val = abs(float(ans))
+    except (ValueError, TypeError):
+        return "unknown"
+    if val < 10:
+        return "small (<10)"
+    elif val < 100:
+        return "medium (10-99)"
+    elif val < 1000:
+        return "large (100-999)"
+    else:
+        return "very large (1000+)"
 
-    categories = {
-        "arithmetic": [],
-        "multi_step": [],
-        "fractions_ratios": [],
-        "money_shopping": [],
-        "time_scheduling": [],
-        "geometry_measurement": [],
-        "comparison": [],
-        "percentage": [],
-        "other": [],
-    }
 
-    keywords = {
-        "money_shopping": ["dollar", "cost", "price", "buy", "sell", "pay", "earn", "spend", "profit", "store", "shop"],
-        "time_scheduling": ["hour", "minute", "day", "week", "month", "year", "time", "schedule", "clock"],
-        "fractions_ratios": ["half", "third", "quarter", "fraction", "ratio", "twice", "triple", "double"],
-        "percentage": ["percent", "%"],
-        "geometry_measurement": ["mile", "meter", "foot", "inch", "area", "length", "width", "height", "distance"],
-        "comparison": ["more than", "less than", "fewer", "greater", "difference", "compare"],
-    }
+def classify_question_length(question):
+    n = len(question.split())
+    if n < 30:
+        return "short (<30 words)"
+    elif n < 60:
+        return "medium (30-59)"
+    else:
+        return "long (60+)"
 
-    for i, example in enumerate(ds):
-        question = example["question"].lower()
-        answer = example["answer"]
-        num_steps = answer.count("<<")
 
-        categorized = False
-        for cat, kws in keywords.items():
-            if any(kw in question for kw in kws):
-                categories[cat].append({"idx": i, "question": example["question"], "steps": num_steps})
-                categorized = True
-                break
+OPERATION_PATTERNS = {
+    "addition": re.compile(r"[\d.]+\s*\+\s*[\d.]+"),
+    "subtraction": re.compile(r"[\d.]+\s*\-\s*[\d.]+"),
+    "multiplication": re.compile(r"[\d.]+\s*\*\s*[\d.]+"),
+    "division": re.compile(r"[\d.]+\s*/\s*[\d.]+"),
+}
 
-        if not categorized:
-            if num_steps >= 4:
-                categories["multi_step"].append({"idx": i, "question": example["question"], "steps": num_steps})
-            elif num_steps <= 1:
-                categories["arithmetic"].append({"idx": i, "question": example["question"], "steps": num_steps})
-            else:
-                categories["other"].append({"idx": i, "question": example["question"], "steps": num_steps})
 
-    cat_counts = {k: len(v) for k, v in categories.items()}
-    avg_steps = {k: np.mean([p["steps"] for p in v]) if v else 0 for k, v in categories.items()}
+def classify_operations(result):
+    """Return the set of arithmetic operations used in the ground truth."""
+    tool_calls = result.get("gt_tool_calls", [])
+    ops_found = set()
+    for expr in tool_calls:
+        for op_name, pattern in OPERATION_PATTERNS.items():
+            if pattern.search(expr):
+                ops_found.add(op_name)
+    return ops_found if ops_found else {"unknown"}
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
-    cats = sorted(cat_counts.keys(), key=lambda x: cat_counts[x], reverse=True)
-    counts = [cat_counts[c] for c in cats]
-    colors = plt.cm.Set3(np.linspace(0, 1, len(cats)))
+def classify_error_type(result):
+    """For incorrect answers, classify the type of error."""
+    if result["is_correct"]:
+        return "correct"
+    pred = result.get("pred_answer")
+    gt = result.get("gt_answer")
+    response = result.get("model_response", "")
 
-    ax1.barh(cats, counts, color=colors, edgecolor="black", linewidth=0.5)
-    ax1.set_xlabel("Number of Problems")
-    ax1.set_title("GSM8K Test Set: Problem Categories")
-    for i, v in enumerate(counts):
-        ax1.text(v + 5, i, str(v), va="center", fontsize=9)
+    if pred is None or "####" not in response:
+        return "format_error"
+    if not any(c in response for c in ["<<", "python", "calc"]):
+        return "no_tool_use"
+    try:
+        pred_val = float(pred)
+        gt_val = float(gt)
+        if gt_val != 0 and abs(pred_val - gt_val) / abs(gt_val) < 0.1:
+            return "close_arithmetic"
+        return "wrong_arithmetic"
+    except (ValueError, TypeError):
+        return "wrong_arithmetic"
 
-    steps = [avg_steps[c] for c in cats]
-    ax2.barh(cats, steps, color=colors, edgecolor="black", linewidth=0.5)
-    ax2.set_xlabel("Average Reasoning Steps")
-    ax2.set_title("GSM8K: Avg Steps per Category")
-    for i, v in enumerate(steps):
-        ax2.text(v + 0.05, i, f"{v:.1f}", va="center", fontsize=9)
 
+# ─── Plot helpers ────────────────────────────────────────────────────────────
+
+def bar_chart(categories, values, title, xlabel, ylabel, filename,
+              color="#4C72B0", horizontal=False, figsize=(10, 5)):
+    fig, ax = plt.subplots(figsize=figsize)
+    positions = np.arange(len(categories))
+    if horizontal:
+        ax.barh(positions, values, color=color)
+        ax.set_yticks(positions)
+        ax.set_yticklabels(categories)
+        ax.set_xlabel(ylabel)
+    else:
+        ax.bar(positions, values, color=color)
+        ax.set_xticks(positions)
+        ax.set_xticklabels(categories, rotation=30, ha="right")
+        ax.set_ylabel(ylabel)
+    ax.set_title(title)
     plt.tight_layout()
-    path = os.path.join(OUTPUT_DIR, "gsm8k_categories.png")
-    plt.savefig(path, dpi=150)
-    plt.close()
-    print(f"Saved {path}")
+    fig.savefig(os.path.join(PLOTS_DIR, filename), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved {filename}")
 
-    step_dist = [example["answer"].count("<<") for example in ds]
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.hist(step_dist, bins=range(0, max(step_dist) + 2), color="#4292c6", edgecolor="black", alpha=0.8)
-    ax.set_xlabel("Number of Reasoning Steps (<<...>> operations)")
-    ax.set_ylabel("Number of Problems")
-    ax.set_title("GSM8K Test Set: Distribution of Reasoning Complexity")
-    ax.axvline(x=np.mean(step_dist), color="red", linestyle="--", label=f"Mean = {np.mean(step_dist):.1f}")
+
+def grouped_bar_chart(categories, values_a, values_b, label_a, label_b,
+                      title, ylabel, filename, figsize=(10, 5)):
+    fig, ax = plt.subplots(figsize=figsize)
+    x = np.arange(len(categories))
+    width = 0.35
+    ax.bar(x - width / 2, values_a, width, label=label_a, color="#4C72B0")
+    ax.bar(x + width / 2, values_b, width, label=label_b, color="#DD8452")
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, rotation=30, ha="right")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
     ax.legend()
-    ax.grid(True, alpha=0.3, axis="y")
     plt.tight_layout()
-    path = os.path.join(OUTPUT_DIR, "gsm8k_step_distribution.png")
-    plt.savefig(path, dpi=150)
-    plt.close()
-    print(f"Saved {path}")
+    fig.savefig(os.path.join(PLOTS_DIR, filename), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved {filename}")
 
-    return cat_counts, avg_steps
 
-# ─── 6. Reward distribution analysis ────────────────────────────────────────
+# ─── W&B Training Curves (optional) ─────────────────────────────────────────
 
-def plot_reward_distribution(df):
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+def plot_wandb_curves():
+    """Pull training curves from W&B and create plots."""
+    if not WANDB_ENTITY or not WANDB_RL_RUN_ID:
+        print("\n[W&B] Skipping training curve plots (WANDB_ENTITY / WANDB_RL_RUN_ID not set).")
+        print("       To enable: set them at the top of this script, or export from W&B UI.")
+        return
 
-    ax1.hist(df["reward"], bins=30, color="#4292c6", edgecolor="black", alpha=0.8)
-    ax1.set_xlabel("Step Reward")
-    ax1.set_ylabel("Count")
-    ax1.set_title("Distribution of Per-Step Rewards")
-    ax1.axvline(x=df["reward"].mean(), color="red", linestyle="--", label=f"Mean = {df['reward'].mean():.4f}")
-    ax1.legend()
+    try:
+        import wandb
+    except ImportError:
+        print("\n[W&B] wandb not installed. Install with: pip install wandb")
+        return
 
-    thirds = len(df) // 3
-    early = df.iloc[:thirds]["reward"]
-    mid = df.iloc[thirds:2*thirds]["reward"]
-    late = df.iloc[2*thirds:]["reward"]
+    print("\n[W&B] Pulling training curves...")
+    api = wandb.Api()
+    run = api.run(f"{WANDB_ENTITY}/{WANDB_PROJECT}/{WANDB_RL_RUN_ID}")
+    history = run.history(samples=5000)
 
-    ax2.boxplot([early, mid, late], labels=["Early\n(0-155)", "Mid\n(156-310)", "Late\n(311-466)"])
-    ax2.set_ylabel("Reward")
-    ax2.set_title("Reward Distribution by Training Phase")
-    ax2.grid(True, alpha=0.3, axis="y")
+    # Reward curve
+    reward_data = history[history["reward"].notna()][["step", "reward"]]
+    if not reward_data.empty:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(reward_data["step"], reward_data["reward"], color="#4C72B0", linewidth=1.5)
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Mean Reward")
+        ax.set_title("RL Training: Mean Reward over Steps")
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        fig.savefig(os.path.join(PLOTS_DIR, "reward_curve.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print("  Saved reward_curve.png")
 
+    # Pass@k curves
+    pass_cols = [c for c in history.columns if c.startswith("pass@")]
+    if pass_cols:
+        pass_data = history[history[pass_cols[0]].notna()][["step"] + pass_cols]
+        fig, ax = plt.subplots(figsize=(10, 5))
+        for col in sorted(pass_cols, key=lambda c: int(c.split("@")[1])):
+            ax.plot(pass_data["step"], pass_data[col], label=col, linewidth=1.5)
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Accuracy")
+        ax.set_title("RL Training: Pass@k on GSM8K Test Set")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        fig.savefig(os.path.join(PLOTS_DIR, "passk_curves.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print("  Saved passk_curves.png")
+
+    # Sequence length
+    seq_data = history[history["sequence_length"].notna()][["step", "sequence_length"]]
+    if not seq_data.empty:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(seq_data["step"], seq_data["sequence_length"], color="#55A868", linewidth=1.5)
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Mean Sequence Length (tokens)")
+        ax.set_title("RL Training: Average Generation Length")
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        fig.savefig(os.path.join(PLOTS_DIR, "sequence_length.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print("  Saved sequence_length.png")
+
+
+# ─── Main Analysis ───────────────────────────────────────────────────────────
+
+def analyze_one(data, label):
+    """Analyze a single eval run, return category → accuracy dicts."""
+    results = data["results"]
+    total = data["total"]
+    correct = data["correct"]
+    print(f"\n{'='*60}")
+    print(f"  {label}: {correct}/{total} ({100*correct/total:.2f}%)")
+    print(f"{'='*60}")
+
+    analyses = {}
+
+    # --- By domain ---
+    domain_counts = defaultdict(lambda: {"correct": 0, "total": 0})
+    for r in results:
+        d = classify_domain(r["question"])
+        domain_counts[d]["total"] += 1
+        domain_counts[d]["correct"] += int(r["is_correct"])
+    analyses["domain"] = {
+        k: v["correct"] / v["total"] if v["total"] > 0 else 0
+        for k, v in sorted(domain_counts.items(), key=lambda x: -x[1]["total"])
+    }
+    analyses["domain_counts"] = {
+        k: v["total"]
+        for k, v in sorted(domain_counts.items(), key=lambda x: -x[1]["total"])
+    }
+    print(f"\n  By domain:")
+    for d, acc in analyses["domain"].items():
+        cnt = domain_counts[d]["total"]
+        print(f"    {d:25s}  {100*acc:5.1f}%  (n={cnt})")
+
+    # --- By number of reasoning steps ---
+    step_counts = defaultdict(lambda: {"correct": 0, "total": 0})
+    for r in results:
+        s = classify_num_steps(r)
+        step_counts[s]["total"] += 1
+        step_counts[s]["correct"] += int(r["is_correct"])
+    analyses["steps"] = {
+        k: v["correct"] / v["total"] if v["total"] > 0 else 0
+        for k, v in sorted(step_counts.items())
+    }
+    analyses["steps_counts"] = {
+        k: v["total"] for k, v in sorted(step_counts.items())
+    }
+    print(f"\n  By number of reasoning steps (tool calls):")
+    for s, acc in analyses["steps"].items():
+        cnt = step_counts[s]["total"]
+        print(f"    {s} steps:  {100*acc:5.1f}%  (n={cnt})")
+
+    # --- By answer magnitude ---
+    mag_counts = defaultdict(lambda: {"correct": 0, "total": 0})
+    for r in results:
+        m = classify_answer_magnitude(r)
+        mag_counts[m]["total"] += 1
+        mag_counts[m]["correct"] += int(r["is_correct"])
+    mag_order = ["small (<10)", "medium (10-99)", "large (100-999)",
+                 "very large (1000+)", "unknown"]
+    analyses["magnitude"] = {
+        k: mag_counts[k]["correct"] / mag_counts[k]["total"]
+        if mag_counts[k]["total"] > 0 else 0
+        for k in mag_order if mag_counts[k]["total"] > 0
+    }
+    print(f"\n  By answer magnitude:")
+    for m in mag_order:
+        if mag_counts[m]["total"] > 0:
+            acc = mag_counts[m]["correct"] / mag_counts[m]["total"]
+            print(f"    {m:25s}  {100*acc:5.1f}%  (n={mag_counts[m]['total']})")
+
+    # --- By question length ---
+    len_counts = defaultdict(lambda: {"correct": 0, "total": 0})
+    for r in results:
+        l = classify_question_length(r["question"])
+        len_counts[l]["total"] += 1
+        len_counts[l]["correct"] += int(r["is_correct"])
+    len_order = ["short (<30 words)", "medium (30-59)", "long (60+)"]
+    analyses["question_length"] = {
+        k: len_counts[k]["correct"] / len_counts[k]["total"]
+        if len_counts[k]["total"] > 0 else 0
+        for k in len_order if len_counts[k]["total"] > 0
+    }
+    print(f"\n  By question length:")
+    for l in len_order:
+        if len_counts[l]["total"] > 0:
+            acc = len_counts[l]["correct"] / len_counts[l]["total"]
+            print(f"    {l:25s}  {100*acc:5.1f}%  (n={len_counts[l]['total']})")
+
+    # --- By operation type ---
+    op_counts = defaultdict(lambda: {"correct": 0, "total": 0})
+    for r in results:
+        ops = classify_operations(r)
+        for op in ops:
+            op_counts[op]["total"] += 1
+            op_counts[op]["correct"] += int(r["is_correct"])
+    analyses["operations"] = {
+        k: v["correct"] / v["total"] if v["total"] > 0 else 0
+        for k, v in sorted(op_counts.items(), key=lambda x: -x[1]["total"])
+    }
+    print(f"\n  By operation type (a problem can have multiple):")
+    for op, acc in analyses["operations"].items():
+        cnt = op_counts[op]["total"]
+        print(f"    {op:20s}  {100*acc:5.1f}%  (n={cnt})")
+
+    # --- Error type breakdown (incorrect only) ---
+    error_counts = Counter()
+    for r in results:
+        etype = classify_error_type(r)
+        if etype != "correct":
+            error_counts[etype] += 1
+    analyses["error_types"] = dict(error_counts.most_common())
+    print(f"\n  Error type breakdown ({total - correct} errors):")
+    for etype, cnt in error_counts.most_common():
+        print(f"    {etype:25s}  {cnt:4d}  ({100*cnt/(total-correct):.1f}%)")
+
+    return analyses
+
+
+def main():
+    # Check data files exist
+    has_sft = os.path.exists(SFT_JSON)
+    has_rl = os.path.exists(RL_JSON)
+
+    if not has_sft and not has_rl:
+        print("ERROR: No data files found in data/ directory.")
+        print("Run these commands first:")
+        print("  cd a4/nanochat-modal")
+        print("  uv run modal run nanochat_modal.py::stage_gsm8k_detailed_eval")
+        print("Then download:")
+        print("  modal volume get nanochat-vol nanochat_cache/report/gsm8k_detailed_sft.json ../part3/data/gsm8k_detailed_sft.json")
+        print("  modal volume get nanochat-vol nanochat_cache/report/gsm8k_detailed_rl.json  ../part3/data/gsm8k_detailed_rl.json")
+        return
+
+    sft_analyses = None
+    rl_analyses = None
+
+    if has_sft:
+        sft_data = load_json(SFT_JSON)
+        sft_analyses = analyze_one(sft_data, "After SFT")
+
+    if has_rl:
+        rl_data = load_json(RL_JSON)
+        rl_analyses = analyze_one(rl_data, "After RL")
+
+    # ─── Generate plots ──────────────────────────────────────────────────
+
+    print(f"\nGenerating plots...")
+
+    # Use RL data as primary (it's the Part 3 focus); SFT for comparison
+    primary_data = rl_data if has_rl else sft_data
+    primary_analyses = rl_analyses if has_rl else sft_analyses
+    primary_label = "After RL" if has_rl else "After SFT"
+
+    # 1. Accuracy by domain
+    domains = list(primary_analyses["domain"].keys())
+    domain_accs = [primary_analyses["domain"][d] * 100 for d in domains]
+    domain_labels = [f"{d}\n(n={primary_analyses['domain_counts'][d]})" for d in domains]
+    bar_chart(domain_labels, domain_accs,
+              f"GSM8K Accuracy by Problem Domain ({primary_label})",
+              "Domain", "Accuracy (%)",
+              "accuracy_by_domain.png", figsize=(12, 5))
+
+    # 2. Accuracy by number of reasoning steps
+    steps = sorted(primary_analyses["steps"].keys())
+    step_accs = [primary_analyses["steps"][s] * 100 for s in steps]
+    step_labels = [str(s) for s in steps]
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(steps, step_accs, "o-", color="#4C72B0", linewidth=2, markersize=8)
+    ax.set_xlabel("Number of Reasoning Steps (tool calls)")
+    ax.set_ylabel("Accuracy (%)")
+    ax.set_title(f"GSM8K Accuracy vs. Reasoning Steps ({primary_label})")
+    ax.grid(True, alpha=0.3)
+    for s, acc in zip(steps, step_accs):
+        cnt = primary_analyses["steps_counts"][s]
+        ax.annotate(f"n={cnt}", (s, acc), textcoords="offset points",
+                    xytext=(0, 10), ha="center", fontsize=8)
     plt.tight_layout()
-    path = os.path.join(OUTPUT_DIR, "reward_distribution.png")
-    plt.savefig(path, dpi=150)
-    plt.close()
-    print(f"Saved {path}")
+    fig.savefig(os.path.join(PLOTS_DIR, "accuracy_by_steps.png"), dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print("  Saved accuracy_by_steps.png")
 
-# ─── Main ────────────────────────────────────────────────────────────────────
+    # 3. Accuracy by answer magnitude
+    mag_order = [m for m in ["small (<10)", "medium (10-99)",
+                             "large (100-999)", "very large (1000+)"]
+                 if m in primary_analyses["magnitude"]]
+    mag_accs = [primary_analyses["magnitude"][m] * 100 for m in mag_order]
+    bar_chart(mag_order, mag_accs,
+              f"GSM8K Accuracy by Answer Magnitude ({primary_label})",
+              "Answer Magnitude", "Accuracy (%)",
+              "accuracy_by_magnitude.png")
+
+    # 4. Accuracy by operation type
+    ops = list(primary_analyses["operations"].keys())
+    op_accs = [primary_analyses["operations"][o] * 100 for o in ops]
+    bar_chart(ops, op_accs,
+              f"GSM8K Accuracy by Operation Type ({primary_label})",
+              "Operation", "Accuracy (%)",
+              "accuracy_by_operation.png")
+
+    # 5. Error type breakdown (pie chart)
+    if primary_analyses["error_types"]:
+        etypes = list(primary_analyses["error_types"].keys())
+        ecounts = list(primary_analyses["error_types"].values())
+        fig, ax = plt.subplots(figsize=(8, 8))
+        colors = ["#C44E52", "#DD8452", "#CCB974", "#8172B3", "#64B5CD"]
+        ax.pie(ecounts, labels=etypes, autopct="%1.1f%%",
+               colors=colors[:len(etypes)], startangle=90)
+        ax.set_title(f"Error Type Distribution ({primary_label})")
+        plt.tight_layout()
+        fig.savefig(os.path.join(PLOTS_DIR, "error_types.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print("  Saved error_types.png")
+
+    # 6. SFT vs RL comparison (if both available)
+    if has_sft and has_rl:
+        # By domain
+        common_domains = [d for d in domains if d in sft_analyses["domain"]]
+        sft_domain_accs = [sft_analyses["domain"].get(d, 0) * 100 for d in common_domains]
+        rl_domain_accs = [rl_analyses["domain"].get(d, 0) * 100 for d in common_domains]
+        grouped_bar_chart(common_domains, sft_domain_accs, rl_domain_accs,
+                          "After SFT", "After RL",
+                          "GSM8K Accuracy by Domain: SFT vs RL",
+                          "Accuracy (%)", "sft_vs_rl_domain.png", figsize=(12, 5))
+
+        # By steps
+        common_steps = sorted(set(sft_analyses["steps"].keys()) |
+                              set(rl_analyses["steps"].keys()))
+        sft_step_accs = [sft_analyses["steps"].get(s, 0) * 100 for s in common_steps]
+        rl_step_accs = [rl_analyses["steps"].get(s, 0) * 100 for s in common_steps]
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(common_steps, sft_step_accs, "o-", label="After SFT",
+                color="#4C72B0", linewidth=2, markersize=8)
+        ax.plot(common_steps, rl_step_accs, "s-", label="After RL",
+                color="#DD8452", linewidth=2, markersize=8)
+        ax.set_xlabel("Number of Reasoning Steps")
+        ax.set_ylabel("Accuracy (%)")
+        ax.set_title("GSM8K Accuracy vs. Reasoning Steps: SFT vs RL")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        fig.savefig(os.path.join(PLOTS_DIR, "sft_vs_rl_steps.png"), dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print("  Saved sft_vs_rl_steps.png")
+
+        # Error type comparison
+        all_etypes = sorted(set(sft_analyses["error_types"].keys()) |
+                            set(rl_analyses["error_types"].keys()))
+        sft_ecounts = [sft_analyses["error_types"].get(e, 0) for e in all_etypes]
+        rl_ecounts = [rl_analyses["error_types"].get(e, 0) for e in all_etypes]
+        grouped_bar_chart(all_etypes, sft_ecounts, rl_ecounts,
+                          "After SFT", "After RL",
+                          "Error Type Distribution: SFT vs RL",
+                          "Count", "sft_vs_rl_errors.png")
+
+    # ─── W&B curves ──────────────────────────────────────────────────────
+    plot_wandb_curves()
+
+    # ─── Summary ─────────────────────────────────────────────────────────
+    print(f"\n{'='*60}")
+    print(f"  All plots saved to {PLOTS_DIR}/")
+    print(f"{'='*60}")
+    print("\nFiles generated:")
+    for f in sorted(os.listdir(PLOTS_DIR)):
+        if f.endswith(".png"):
+            print(f"  - {PLOTS_DIR}/{f}")
+
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("Part 3: RL Run Analysis")
-    print("=" * 60)
-
-    print("\n[1] Extracting step rewards from terminal log...")
-    df = extract_step_rewards(TERMINAL_LOG)
-    print(f"    Extracted {len(df)} steps")
-    print(f"    Reward range: {df['reward'].min():.4f} - {df['reward'].max():.4f}")
-    print(f"    Mean reward: {df['reward'].mean():.4f}")
-    print(f"    Seq length range: {df['seq_len'].min():.1f} - {df['seq_len'].max():.1f}")
-
-    print("\n[2] Plotting reward curve...")
-    plot_reward_curve(df)
-
-    print("\n[3] Plotting pass@k eval curve...")
-    eval_steps, pass1, pass8 = plot_passk_curve()
-    print(f"    pass@1 values: {[f'{v:.4f}' for v in pass1]}")
-    print(f"    pass@8 values: {[f'{v:.4f}' for v in pass8]}")
-
-    print("\n[4] Plotting benchmark comparison...")
-    plot_benchmark_comparison()
-
-    print("\n[5] Plotting reward distribution...")
-    plot_reward_distribution(df)
-
-    print("\n[6] Analyzing GSM8K problem categories...")
-    result = analyze_gsm8k_problems()
-    if result:
-        cat_counts, avg_steps = result
-        print("    Categories:")
-        for k, v in sorted(cat_counts.items(), key=lambda x: -x[1]):
-            print(f"      {k}: {v} problems (avg {avg_steps[k]:.1f} steps)")
-
-    print("\n" + "=" * 60)
-    print("All plots saved to:", OUTPUT_DIR)
-    print("=" * 60)
+    main()

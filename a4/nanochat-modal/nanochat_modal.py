@@ -35,7 +35,7 @@ import modal
 from modal import App, Image as ModalImage, Volume, Secret
 
 # ── A4 config (mirrored from ../nanochat_chat_model_a4.py) ───────────────────
-A4_MODEL_TAG        = "d12_swiglu"
+A4_MODEL_TAG        = "d12"
 A4_MODEL_STEP       = "2205"
 WANDB_RUN_TASK1_SFT = "a4_task1_sft"
 WANDB_RUN_TASK1_RL  = "a4_task1_rl"
@@ -83,7 +83,7 @@ DEVICE_BATCH_SIZE = 16    # d24 at 16 is safe; 32 may OOM on some H100 configs
 # Set to "dummy" to disable WandB logging
 # WANDB_RUN = "dummy"
 # WANDB_RUN = "picochat_baseline"
-WANDB_RUN = "picochat_swiglu"
+WANDB_RUN = "a4_baseline_rl_d12"
 
 # ── Volume mount path ──────────────────────────────────────────────────────────
 # All cached data (shards, tokenizer, checkpoints, eval bundle) lives here
@@ -97,7 +97,7 @@ BASE_DIR = "/data/.cache/nanochat"
 # Modal kills a container after this many seconds of wall-clock time.
 # The pretrain timeout must be longer than your expected training time.
 PRETRAIN_TIMEOUT_SEC  = 60 * 60 * 6    # 6 hours
-FINETUNE_TIMEOUT_SEC  = 60 * 60 * 2    # 2 hours (SFT and RL are much shorter)
+FINETUNE_TIMEOUT_SEC  = 60 * 60 * 4    # 4 hours (combined-reward RL needs more time)
 DOWNLOAD_TIMEOUT_SEC  = 60 * 90        # 90 min for shard download
 
 # ── Derived: GPU count ────────────────────────────────────────────────────────
@@ -643,8 +643,8 @@ def stage_sft(wandb_run: str = WANDB_RUN) -> None:
         "scripts.chat_sft",
         [
             f"--run={wandb_run}",
-            "--model-step=4357",
-            "--model-tag=d20"
+            f"--model-tag=d{DEPTH}",
+            "--load-optimizer=0",
         ],
         nproc=_N_FINETUNE_GPUS,
     )
@@ -652,10 +652,11 @@ def stage_sft(wandb_run: str = WANDB_RUN) -> None:
     # speedrun.sh: torchrun ... -m scripts.chat_eval -- -i sft
     # -i sft tells chat_eval to load the SFT checkpoint (not base or rl)
     print("Evaluating SFT checkpoint on task benchmarks...")
-    _torchrun("scripts.chat_eval", 
+    _torchrun("scripts.chat_eval",
               [
                   "-i", "sft",
-               ], 
+                  f"--model-tag=d{DEPTH}",
+              ],
               nproc=_N_FINETUNE_GPUS)
 
     volume.commit()
@@ -702,18 +703,281 @@ def stage_rl(wandb_run: str = WANDB_RUN) -> None:
         "scripts.chat_rl",
         [
             f"--run={wandb_run}",
-            "--model-step=4357",
-            "--model-tag=d20"
+            f"--model-tag=d{DEPTH}",
         ],
         nproc=_N_FINETUNE_GPUS,
     )
 
     # speedrun.sh: torchrun ... -m scripts.chat_eval -- -i rl
     print("Evaluating RL checkpoint...")
-    _torchrun("scripts.chat_eval", ["-i", "rl"], nproc=_N_FINETUNE_GPUS)
+    _torchrun("scripts.chat_eval",
+              ["-i", "rl", f"--model-tag=d{DEPTH}"],
+              nproc=_N_FINETUNE_GPUS)
 
     volume.commit()
     print("RL complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_eval_rl() -> None:
+    """
+    Eval-only for the baseline d12 RL checkpoint (re-run if eval crashed).
+
+    Run:
+        modal run nanochat_modal.py::stage_eval_rl
+    """
+    _setup_cache()
+
+    print(f"Evaluating RL checkpoint (d{DEPTH}, eval-only)...")
+    _torchrun(
+        "scripts.chat_eval",
+        ["-i", "rl", f"--model-tag=d{DEPTH}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("RL eval complete.")
+
+
+# =============================================================================
+# A4 PART 3 — DETAILED GSM8K EVALUATION (per-problem results)
+# =============================================================================
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_gsm8k_detailed_eval() -> None:
+    """
+    Run detailed per-problem GSM8K evaluation on both SFT and RL checkpoints.
+    Saves JSON files with per-problem results for downstream analysis.
+
+    Run:
+        modal run nanochat_modal.py::stage_gsm8k_detailed_eval
+    """
+    _setup_cache()
+
+    model_tag = f"d{DEPTH}"
+
+    print(f"Running detailed GSM8K eval on SFT checkpoint ({model_tag})...")
+    _torchrun(
+        "scripts.gsm8k_detailed_eval",
+        ["--source=sft", f"--model-tag={model_tag}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print(f"Running detailed GSM8K eval on RL checkpoint ({model_tag})...")
+    _torchrun(
+        "scripts.gsm8k_detailed_eval",
+        ["--source=rl", f"--model-tag={model_tag}"],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    volume.commit()
+    print("Detailed GSM8K eval complete. Files saved to report dir.")
+
+
+# =============================================================================
+# A4 PART 4 — COMBINED & SEPARATE REWARD RL RUNS
+# =============================================================================
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_rl_combined(wandb_run: str = "a4_rl_combined") -> None:
+    """
+    Part 4: RL with all reward components active (correctness + format + steps + close).
+    Loads SFT checkpoint from d12, saves RL checkpoint to d12_combined.
+
+    Run:
+        modal run nanochat_modal.py::stage_rl_combined
+    """
+    _setup_cache()
+    src_tag = f"d{DEPTH}"
+    save_tag = f"d{DEPTH}_combined"
+
+    print(f"Running RL with combined rewards (load SFT from {src_tag}, save to {save_tag})...")
+    _torchrun(
+        "scripts.chat_rl_combined2rwd",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={src_tag}",
+            f"--save-tag={save_tag}",
+            "--w-correct=1.0",
+            "--w-format=0.2",
+            "--w-steps=0.2",
+            "--w-close=0.3",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating combined-reward RL checkpoint...")
+    _torchrun("scripts.chat_eval",
+              ["-i", "rl", f"--model-tag={save_tag}"],
+              nproc=_N_FINETUNE_GPUS)
+
+    volume.commit()
+    print("Combined-reward RL complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_rl_format_only(wandb_run: str = "a4_rl_format_only") -> None:
+    """
+    Part 4: RL with correctness + format reward only.
+    Loads SFT checkpoint from d12, saves RL checkpoint to d12_format.
+
+    Run:
+        modal run nanochat_modal.py::stage_rl_format_only
+    """
+    _setup_cache()
+    src_tag = f"d{DEPTH}"
+    save_tag = f"d{DEPTH}_format"
+
+    print(f"Running RL with format reward only (load SFT from {src_tag}, save to {save_tag})...")
+    _torchrun(
+        "scripts.chat_rl_combined2rwd",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={src_tag}",
+            f"--save-tag={save_tag}",
+            "--w-correct=1.0",
+            "--w-format=0.2",
+            "--w-steps=0.0",
+            "--w-close=0.0",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating format-only RL checkpoint...")
+    _torchrun("scripts.chat_eval",
+              ["-i", "rl", f"--model-tag={save_tag}"],
+              nproc=_N_FINETUNE_GPUS)
+
+    volume.commit()
+    print("Format-only RL complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_rl_close_only(wandb_run: str = "a4_rl_close_only") -> None:
+    """
+    Part 4: RL with correctness + close-arithmetic reward only.
+    Loads SFT checkpoint from d12, saves RL checkpoint to d12_close.
+
+    Run:
+        modal run nanochat_modal.py::stage_rl_close_only
+    """
+    _setup_cache()
+    src_tag = f"d{DEPTH}"
+    save_tag = f"d{DEPTH}_close"
+
+    print(f"Running RL with close-arithmetic reward only (load SFT from {src_tag}, save to {save_tag})...")
+    _torchrun(
+        "scripts.chat_rl_combined2rwd",
+        [
+            f"--run={wandb_run}",
+            f"--model-tag={src_tag}",
+            f"--save-tag={save_tag}",
+            "--w-correct=1.0",
+            "--w-format=0.0",
+            "--w-steps=0.0",
+            "--w-close=0.3",
+        ],
+        nproc=_N_FINETUNE_GPUS,
+    )
+
+    print("Evaluating close-only RL checkpoint...")
+    _torchrun("scripts.chat_eval",
+              ["-i", "rl", f"--model-tag={save_tag}"],
+              nproc=_N_FINETUNE_GPUS)
+
+    volume.commit()
+    print("Close-only RL complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_eval_part4() -> None:
+    """
+    Eval-only for all Part 4 RL checkpoints.
+
+    Run:
+        modal run nanochat_modal.py::stage_eval_part4
+    """
+    _setup_cache()
+
+    for tag in [f"d{DEPTH}_combined", f"d{DEPTH}_format", f"d{DEPTH}_close"]:
+        print(f"Evaluating RL checkpoint {tag}...")
+        _torchrun("scripts.chat_eval",
+                  ["-i", "rl", f"--model-tag={tag}"],
+                  nproc=_N_FINETUNE_GPUS)
+
+    volume.commit()
+    print("All Part 4 evals complete.")
+
+
+@app.function(
+    image=image,
+    secrets=[secret],
+    volumes={VOLUME_MOUNT: volume},
+    gpu=GPU_FINETUNE,
+    timeout=FINETUNE_TIMEOUT_SEC,
+)
+def stage_gsm8k_detailed_eval_part4() -> None:
+    """
+    Run detailed per-problem GSM8K evaluation on all Part 4 RL checkpoints.
+    Saves JSON files with per-problem results for downstream error analysis.
+
+    Run:
+        modal run nanochat_modal.py::stage_gsm8k_detailed_eval_part4
+    """
+    _setup_cache()
+
+    tags = [
+        (f"d{DEPTH}_combined", "gsm8k_detailed_rl_combined.json"),
+        (f"d{DEPTH}_format",   "gsm8k_detailed_rl_format.json"),
+        (f"d{DEPTH}_close",    "gsm8k_detailed_rl_close.json"),
+    ]
+
+    for tag, filename in tags:
+        print(f"Running detailed GSM8K eval on RL checkpoint {tag}...")
+        _torchrun(
+            "scripts.gsm8k_detailed_eval",
+            ["--source=rl", f"--model-tag={tag}", f"--output-filename={filename}"],
+            nproc=_N_FINETUNE_GPUS,
+        )
+
+    volume.commit()
+    print("All Part 4 detailed evals complete. JSON files saved to report dir.")
 
 
 # =============================================================================
@@ -731,7 +995,7 @@ def stage_sft_task1(wandb_run: str = WANDB_RUN_TASK1_SFT) -> None:
     """
     A4 Part 2 Task 1 — SFT with original nanochat configuration.
 
-    Loads the a3 pretrained d12_swiglu checkpoint and runs SFT using the
+    Loads the a3 pretrained d12 baseline checkpoint and runs SFT using the
     default data mixture (SmolTalk, MMLU, GSM8K, SpellingBee, identity).
     Logs to W&B and evaluates on all ChatCORE tasks afterwards.
 
@@ -746,7 +1010,7 @@ def stage_sft_task1(wandb_run: str = WANDB_RUN_TASK1_SFT) -> None:
 
     print(f"Running SFT (Task 1 — original config) on {A4_MODEL_TAG} step {A4_MODEL_STEP}...")
     _torchrun(
-        "scripts.chat_sft_swiglu",
+        "scripts.chat_sft",
         [
             f"--run={wandb_run}",
             f"--model-tag={A4_MODEL_TAG}",
@@ -758,7 +1022,7 @@ def stage_sft_task1(wandb_run: str = WANDB_RUN_TASK1_SFT) -> None:
 
     print("Evaluating SFT checkpoint on task benchmarks...")
     _torchrun(
-        "scripts.chat_eval_swiglu",
+        "scripts.chat_eval",
         ["-i", "sft", f"--model-tag={A4_MODEL_TAG}"],
         nproc=_N_FINETUNE_GPUS,
     )
@@ -776,10 +1040,10 @@ def stage_sft_task1(wandb_run: str = WANDB_RUN_TASK1_SFT) -> None:
 )
 def stage_rl_task1(wandb_run: str = WANDB_RUN_TASK1_RL) -> None:
     """
-    A4 Part 2 Task 1 — RL (midtraining) with original nanochat configuration.
+    A4 Part 2 Task 1 — RL with original nanochat configuration.
 
     Loads the SFT checkpoint produced by stage_sft_task1 and runs GRPO on
-    GSM8K using chat_rl.py default hyperparameters.  Does NOT pass
+    GSM8K using chat_rl.py default hyperparameters. Does NOT pass
     --model-step so that the latest SFT checkpoint is auto-detected.
 
     Run:
@@ -789,7 +1053,7 @@ def stage_rl_task1(wandb_run: str = WANDB_RUN_TASK1_RL) -> None:
 
     print(f"Running RL Task 1 (GRPO on GSM8K) from SFT checkpoint {A4_MODEL_TAG}...")
     _torchrun(
-        "scripts.chat_rl_swiglu",
+        "scripts.chat_rl",
         [
             f"--run={wandb_run}",
             f"--model-tag={A4_MODEL_TAG}",
@@ -799,7 +1063,7 @@ def stage_rl_task1(wandb_run: str = WANDB_RUN_TASK1_RL) -> None:
 
     print("Evaluating RL checkpoint...")
     _torchrun(
-        "scripts.chat_eval_swiglu",
+        "scripts.chat_eval",
         ["-i", "rl", f"--model-tag={A4_MODEL_TAG}"],
         nproc=_N_FINETUNE_GPUS,
     )
@@ -826,7 +1090,7 @@ def stage_eval_rl_task1() -> None:
 
     print("Evaluating RL checkpoint (eval-only)...")
     _torchrun(
-        "scripts.chat_eval_swiglu",
+        "scripts.chat_eval",
         ["-i", "rl", f"--model-tag={A4_MODEL_TAG}"],
         nproc=_N_FINETUNE_GPUS,
     )
@@ -836,11 +1100,8 @@ def stage_eval_rl_task1() -> None:
 
 
 # =============================================================================
-# A4 PART 2 — TASK 2: SFT + RL with extra dataset (OpenHermes-2.5)
+# A4 PART 2 — TASK 2: SFT with extra dataset (OpenHermes-2.5), standard d12
 # =============================================================================
-# Prerequisite: download OpenHermes-2.5 and convert to JSONL (see chat instructions),
-# then put on volume, e.g.:
-#   modal volume put nanochat-vol ./openhermes_2.5.jsonl /vol/nanochat_cache/openhermes_2.5.jsonl
 
 @app.function(
     image=image,
@@ -853,9 +1114,8 @@ def stage_sft_task2(wandb_run: str = WANDB_RUN_TASK2_SFT) -> None:
     """
     A4 Part 2 Task 2 — SFT with original mixture + OpenHermes-2.5.
 
-    Same as Task 1 but adds OpenHermes-2.5 to the training mixture.
-    Expects openhermes_2.5.jsonl at NANOCHAT_CACHE (download + convert first, then
-    modal volume put nanochat-vol ./openhermes_2.5.jsonl /vol/nanochat_cache/openhermes_2.5.jsonl).
+    Uses the standard d12 model (no SwiGLU), same as stage_sft Task 1.
+    Downloads and converts OpenHermes-2.5 automatically if not cached.
 
     Run:
         modal run nanochat_modal.py::stage_sft_task2
@@ -867,68 +1127,38 @@ def stage_sft_task2(wandb_run: str = WANDB_RUN_TASK2_SFT) -> None:
     _curl(IDENTITY_JSONL_URL, identity_dest)
 
     openhermes_dest = os.path.join(NANOCHAT_CACHE, "openhermes_2.5.jsonl")
-    os.environ["OPENHERMES_JSONL"] = openhermes_dest
+    if not os.path.exists(openhermes_dest):
+        print("OpenHermes-2.5 JSONL not found on volume — downloading and converting...")
+        _python("scripts.convert_openhermes", [openhermes_dest])
+        volume.commit()
+        print("OpenHermes-2.5 JSONL created and committed to volume.")
+    else:
+        print(f"OpenHermes-2.5 JSONL found at {openhermes_dest}, skipping download.")
 
-    print(f"Running SFT (Task 2 — + OpenHermes-2.5) on {A4_MODEL_TAG} step {A4_MODEL_STEP}...")
+    model_tag = f"d{DEPTH}"
+    save_tag = f"d{DEPTH}_openhermes"
+    print(f"Running SFT Task 2 (original + OpenHermes-2.5) on {model_tag}, saving to {save_tag}...")
     _torchrun(
-        "scripts.chat_sft_swiglu_task2",
+        "scripts.chat_sft",
         [
             f"--run={wandb_run}",
-            f"--model-tag={A4_MODEL_TAG}",
-            f"--model-step={A4_MODEL_STEP}",
+            f"--model-tag={model_tag}",
+            f"--save-tag={save_tag}",
             "--load-optimizer=0",
+            f"--extra-jsonl={openhermes_dest}",
         ],
         nproc=_N_FINETUNE_GPUS,
     )
 
-    print("Evaluating SFT checkpoint on task benchmarks...")
+    print("Evaluating SFT Task 2 checkpoint on task benchmarks...")
     _torchrun(
-        "scripts.chat_eval_swiglu",
-        ["-i", "sft", f"--model-tag={A4_MODEL_TAG}"],
+        "scripts.chat_eval",
+        ["-i", "sft", f"--model-tag={save_tag}"],
         nproc=_N_FINETUNE_GPUS,
     )
 
     volume.commit()
     print("SFT Task 2 complete.")
-
-
-@app.function(
-    image=image,
-    secrets=[secret],
-    volumes={VOLUME_MOUNT: volume},
-    gpu=GPU_FINETUNE,
-    timeout=FINETUNE_TIMEOUT_SEC,
-)
-def stage_rl_task2(wandb_run: str = WANDB_RUN_TASK2_RL) -> None:
-    """
-    A4 Part 2 Task 2 — RL (midtraining) after Task 2 SFT.
-
-    Loads the SFT checkpoint from stage_sft_task2 and runs GRPO on GSM8K.
-
-    Run:
-        modal run nanochat_modal.py::stage_rl_task2
-    """
-    _setup_cache()
-
-    print(f"Running RL Task 2 (GRPO on GSM8K) from SFT checkpoint {A4_MODEL_TAG}...")
-    _torchrun(
-        "scripts.chat_rl_swiglu",
-        [
-            f"--run={wandb_run}",
-            f"--model-tag={A4_MODEL_TAG}",
-        ],
-        nproc=_N_FINETUNE_GPUS,
-    )
-
-    print("Evaluating RL checkpoint...")
-    _torchrun(
-        "scripts.chat_eval_swiglu",
-        ["-i", "rl", f"--model-tag={A4_MODEL_TAG}"],
-        nproc=_N_FINETUNE_GPUS,
-    )
-
-    volume.commit()
-    print("RL Task 2 complete.")
 
 
 # =============================================================================
