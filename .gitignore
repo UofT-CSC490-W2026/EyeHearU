@@ -35,6 +35,7 @@ Thumbs.db
 
 # React Native / Expo
 **/mobile/node_modules/
+**/node_modules/
 **/mobile/.expo/
 **/mobile/dist/
 **/mobile/ios/Pods/
