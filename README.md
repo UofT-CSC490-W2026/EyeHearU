@@ -1,136 +1,133 @@
 # Eye Hear U
 
-**Real-time ASL-to-English translation on iOS** 
-
-Eye Hear U translates isolated American Sign Language (ASL) signs into English text and speech using a mobile app, a backend inference API, and a video classifier trained on public ASL datasets. This repository contains deliverables for CSC490 assignments A1, A2, and A3.
-
----
-
-## Assignments Overview
-
-| Assignment | Focus | Contents |
-|------------|-------|----------|
-| **A1** | Project proposal and planning | Initial project idea, problem statement, and team planning |
-| **A2** | Full-stack ASL app + infrastructure | Datasets, architecture, data pipeline, Terraform IaC, backend, mobile, ML |
-| **A3** | LLM ablations on Modal | Nanochat baseline + SwiGLU / RMSNorm ablations, cloud training |
+Eye Hear U is a real-time ASL-to-English translation project for mobile, backed by a FastAPI inference API and an I3D video classifier.  
+This repository is organized by assignment milestones (`a1` through `a5`), with **`a5/` as the latest integrated system** and primary implementation.
 
 ---
 
-### A1 — Project Proposal
+## Repository Map
 
-- **Location:** `a1/`
-- **Deliverables:** Project proposal document (`a1.pdf`)
-- Defines the problem (no simple real-time ASL-to-English tool), target users, and high-level solution approach.
-
----
-
-### A2 — Eye Hear U: Datasets, Architecture & Data Pipeline
-
-- **Location:** `a2/`
-- **Parts:**
-  - **Part 1:** Aspirational datasets & schemas — ideal training/eval data for isolated signs and mobile-captured scenarios
-  - **Part 2:** System architecture — mobile app, FastAPI backend, 3D CNN classifier, Firebase, AWS
-  - **Part 3:** Data pipeline — ingestion (ASL Citizen, WLASL, MS-ASL), preprocessing, unified dataset, validation
-  - **Part 5:** Disaster recovery — Terraform state, S3, DynamoDB locks
-- **Components:**
-  - `backend/` — FastAPI inference API
-  - `mobile/` — React Native (Expo) iOS app
-  - `ml/` — PyTorch video classifier (3D CNN / R3D-18)
-  - `data/` — Data pipeline scripts (ingest, preprocess, build dataset)
-  - `infrastructure/` — Terraform modules (S3, ECR, Batch, ECS, IAM, networking, monitoring)
-  - `docs/` — `architecture.md`, `data_schema.md`, `data_pipeline.md`, `a2_writeup.md`, `terraform_guide.md`
+| Folder | What it contains | Current relevance |
+|---|---|---|
+| `a1/` | Initial proposal and project framing | Historical |
+| `a2/` | First full-stack Eye Hear U implementation (backend/mobile/ml/data/infra) | Historical baseline |
+| `a3/` | Nanochat ablations on Modal (SwiGLU, RMSNorm) | Separate experiment track |
+| `a4/` | Additional nanochat-related deliverables | Separate experiment track |
+| `a5/` | Latest end-to-end Eye Hear U stack (app, API, ML, data, infra, docs) | **Primary** |
 
 ---
 
-### A3 — Nanochat Ablations on Modal
+## `a5` at a Glance (Primary System)
 
-- **Location:** `a3/nanochat-modal/`
-- **Focus:** Ablation studies on Karpathy’s [nanochat](https://github.com/karpathy/nanochat) — baseline (ReLU²) vs SwiGLU and Learnable RMSNorm.
-- **Deliverables:**
-  - `nanochat_modal.py` — Modal app for data staging, tokenizer, pretrain, and eval
-  - `ablation_swiglu/` — SwiGLU model and training entry
-  - `ablation_rmsnorm/` — Learnable RMSNorm model and training entry
-- **Setup:** Clone nanochat into the repo, install `uv` + Modal, configure secrets. See `a3/nanochat-modal/README.md`.
+`a5/` is the most complete and current version of Eye Hear U. It includes:
+
+- `a5/backend/`: FastAPI inference service with `/health`, `/ready`, and `/api/v1/predict`.
+- `a5/mobile/`: Expo React Native app (`index`, `camera`, `history`) with local history and TTS.
+- `a5/ml/`: I3D model code (`i3d_msft`), training/evaluation scripts, Modal training entrypoint.
+- `a5/data/`: ingestion, preprocessing, split-planning, and validation scripts.
+- `a5/infrastructure/`: Terraform modules plus Kubernetes manifests.
+- `a5/docs/`: user/dev/testing/production/eval/profiling/benchmarking docs.
+
+Primary reference docs:
+
+- `a5/README.md`
+- `a5/docs/DEVELOPER_GUIDE.md`
+- `a5/docs/USER_GUIDE.md`
+- `a5/docs/TESTING.md`
+- `a5/docs/PRODUCTION.md`
 
 ---
 
-## Project Structure
+## `a5` Architecture Summary
 
-```
-.
-├── a1/                     # A1: Project proposal
-│   └── a1.pdf
-│
-├── a2/                     # A2: Eye Hear U full project
-│   ├── backend/            # FastAPI API
-│   ├── mobile/             # React Native app
-│   ├── ml/                 # Video classifier
-│   ├── data/               # Data pipeline scripts
-│   ├── infrastructure/     # Terraform IaC
-│   ├── docs/               # A2 documentation
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   └── Project Doc.pdf
-│
-├── a3/                     # A3: LLM ablations
-│   └── nanochat-modal/     # Modal + SwiGLU + RMSNorm
-│       ├── nanochat_modal.py
-│       ├── ablation_swiglu/
-│       └── ablation_rmsnorm/
-│
-└── .gitignore
+```text
+Mobile (Expo) -> FastAPI Backend -> I3D Model Inference
+      |                |                 |
+      |                |                 -> PyTorch I3D checkpoint + label map
+      |                -> preprocessing + top-k prediction response
+      -> camera capture, upload, result display, history, TTS
+
+Data + Training paths:
+- data/scripts: ingest/preprocess/unify/validate + split planning
+- ml: training/eval (local + S3 workflows, Modal execution)
+- infrastructure: Terraform (AWS) and optional Kubernetes manifests
 ```
 
 ---
 
-## Quick Start
+## Quick Start (from `a5`)
 
-### A2 — Eye Hear U (Infrastructure)
+### Backend
 
 ```bash
-cd a2/infrastructure
+cd a5/backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+export PYTHONPATH=..
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Mobile
+
+```bash
+cd a5/mobile
+npm install --legacy-peer-deps
+npm run start:lan
+```
+
+Set `EXPO_PUBLIC_API_URL` (or `app.json` extra config) to your backend URL.
+
+### ML Training (Modal)
+
+```bash
+pip install modal
+modal setup
+modal run a5/ml/modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 1 --clip-limit 200
+```
+
+### Data Pipeline
+
+```bash
+cd a5/data/scripts
+pip install -r requirements.txt
+export PIPELINE_ENV=local
+python ingest_asl_citizen.py
+python ingest_wlasl.py
+python ingest_msasl.py
+python preprocess_clips.py
+python build_unified_dataset.py
+python validate.py
+```
+
+### Infrastructure
+
+```bash
+cd a5/infrastructure
 terraform init
 terraform apply -var-file=environments/dev.tfvars
 ```
 
-### A2 — Data Pipeline
+---
+
+## Testing (Primary Targets in `a5`)
 
 ```bash
-cd a2/data/scripts
-pip install -r requirements.txt
-export PIPELINE_ENV=local
-python ingest_asl_citizen.py
-python preprocess_clips.py
-python build_unified_dataset.py
-```
+# Backend
+cd a5/backend && pytest tests/ -v --cov=app --cov-fail-under=100
 
-### A2 — Backend & Mobile
+# ML
+cd a5/ml && python -m pytest tests/ -v --cov --cov-fail-under=100
 
-```bash
-cd a2/backend && pip install -r requirements.txt && cp .env.example .env && uvicorn app.main:app --reload
-cd a2/mobile && npm install && npx expo start
-```
-
-### A3 — Nanochat on Modal
-
-```bash
-cd a3/nanochat-modal
-git clone https://github.com/karpathy/nanochat.git
-uv sync && modal setup
-uv run modal run nanochat_modal.py::stage_data
-uv run modal run nanochat_modal.py::stage_pretrain
+# Mobile
+cd a5/mobile && npx jest --coverage
 ```
 
 ---
 
-## Datasets (A2)
+## Notes on Historical Folders
 
-| Dataset     | Role                    | Size                          |
-|-------------|-------------------------|-------------------------------|
-| **ASL Citizen** | Primary (train/val/test) | 2,731 glosses, ~83K videos    |
-| **WLASL**   | Supplementary            | 2,000 glosses, ~21K videos    |
-| **MS-ASL**  | Supplementary            | 1,000 glosses, ~25K videos    |
-
----
-
-For detailed documentation, see `a2/docs/architecture.md`, `a2/docs/data_schema.md`, `a2/docs/data_pipeline.md`, and `a2/docs/terraform_guide.md`.
+- `a1/` through `a4/` are preserved assignment deliverables and experiment tracks.
+- For active development of the ASL app/API/ML pipeline, prefer working in `a5/`.
+- When in doubt, treat `a5/docs/` and `a5/README.md` as the canonical project references.
