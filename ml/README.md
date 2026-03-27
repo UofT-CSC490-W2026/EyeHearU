@@ -26,16 +26,16 @@ The training pipeline pulls data from S3 using versioned split plans and trains 
 | `i3d_msft/s3_data.py` | S3 sync helpers: split downloads, clip downloads |
 | `i3d_msft/build_label_map_artifacts.py` | Rebuild label map from training splits |
 | `i3d_msft/export_label_map.py` | CSV → JSON label map utility |
-| `modal_train_i3d.py` (repo root) | Modal GPU wrapper for cloud training |
+| `modal_train_i3d.py` | Modal GPU wrapper for cloud training |
 
 **Quick start (Modal):**
 
 ```bash
 pip install modal && modal setup
 # Smoke test
-modal run modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 1 --clip-limit 200
+modal run ml/modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 1 --clip-limit 200
 # Full training
-modal run modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 20
+modal run ml/modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 20
 ```
 
 See **`docs/i3d_s3_repro_guide.md`** for the full reproducible workflow and **`docs/ops_migration_modal_sft_tutorial.md`** for the AWS/Modal migration playbook.

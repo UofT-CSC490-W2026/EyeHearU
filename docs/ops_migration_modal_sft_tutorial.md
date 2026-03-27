@@ -219,13 +219,13 @@ modal secret create aws-credentials \
 
 Entry script:
 
-- `modal_train_i3d.py`
+- `ml/modal_train_i3d.py`
 
 ### 5.1 Smoke Run (validate the full path first)
 
 ```bash
 cd /Users/chloe/EyeHearU
-modal run modal_train_i3d.py \
+modal run ml/modal_train_i3d.py \
   --bucket eye-hear-u-public-data-ca1 \
   --plan-id candidate-ac-eval-v4 \
   --epochs 1 \
@@ -235,7 +235,7 @@ modal run modal_train_i3d.py \
 ### 5.2 Full Training
 
 ```bash
-modal run modal_train_i3d.py \
+modal run ml/modal_train_i3d.py \
   --bucket eye-hear-u-public-data-ca1 \
   --plan-id candidate-ac-eval-v4 \
   --epochs 20 \
@@ -253,7 +253,7 @@ modal run modal_train_i3d.py \
 SFT command:
 
 ```bash
-modal run modal_train_i3d.py \
+modal run ml/modal_train_i3d.py \
   --bucket eye-hear-u-public-data-ca1 \
   --plan-id candidate-ac-eval-v4 \
   --epochs 20 \
@@ -287,9 +287,9 @@ The new account user lacks permissions. Ask your admin to grant required service
 
 You are still pointing to the old account state bucket. Use the new account state bucket and rerun `terraform init -reconfigure`.
 
-### 7.4 `modal_train_i3d.py` not found
+### 7.4 `ml/modal_train_i3d.py` not found
 
-You are running from the wrong directory. Run from repo root, or reference the script with `../modal_train_i3d.py`.
+You are running from the wrong directory. Run from repo root so that `ml/modal_train_i3d.py` resolves correctly.
 
 ---
 

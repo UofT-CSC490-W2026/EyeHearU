@@ -122,11 +122,10 @@ The deployed model is **Microsoft's Inception I3D** (spatiotemporal 3D CNN), fin
 │   │   └── dataset.py        # ASLVideoDataset (PyTorch)
 │   ├── evaluation/
 │   │   └── evaluate.py       # Accuracy, F1, confusion matrix, latency
+│   ├── modal_train_i3d.py    # Modal GPU wrapper for cloud training
 │   ├── profiling/            # cProfile analysis of 5 key functions
 │   ├── tests/                # 300+ unit tests, 100% coverage
 │   └── requirements.txt
-│
-├── modal_train_i3d.py        # Modal GPU wrapper for I3D training
 │
 ├── data/                     # Data pipeline
 │   ├── Dockerfile            # Pipeline container image
@@ -238,9 +237,9 @@ python validate.py
 pip install modal
 modal setup  # one-time auth
 # Smoke test (1 epoch, 200 clips)
-modal run modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 1 --clip-limit 200
+modal run ml/modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 1 --clip-limit 200
 # Full training
-modal run modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 20
+modal run ml/modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 20
 ```
 
 See [I3D S3 Repro Guide](docs/i3d_s3_repro_guide.md) and [Ops Migration Tutorial](docs/ops_migration_modal_sft_tutorial.md) for details.

@@ -109,6 +109,7 @@ python -m pytest tests/ -v --cov --cov-report=term-missing
 | I3D evaluation | `test_i3d_evaluate.py` — get_device, _read_split_rows, _build_gloss_dict_from_csv, _is_readable_video, _write_filtered_split, _topk_hits, _compute_mrr_and_dcg, evaluate(), build_parser, main() (missing checkpoint, invalid topk, integration, S3 checkpoint, clip limit, custom output) |
 | I3D S3 data | `test_i3d_s3_data.py` — get_s3_client, get_active_plan_id, download_splits, _read_split_rows, collect_required_filenames, download_clip_subset (success, skip existing, missing key, access denied) |
 | Label map artifacts | `test_build_label_map_artifacts.py` — _write_json, main() (basic, clip limit, S3 upload, clean workdir, empty filtered raises) |
+| Modal GPU wrapper | `test_modal_train_i3d.py` — _parse_run_name, _build_train_cmd, _build_eval_cmd, _resolve_active_plan, _upload_checkpoints, _upload_run_metadata |
 
 **Total:** 300+ tests, **100%** line coverage.
 
