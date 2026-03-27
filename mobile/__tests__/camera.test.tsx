@@ -442,30 +442,32 @@ describe("CameraScreen", () => {
 
       jest.useFakeTimers({ legacyFakeTimers: false });
 
-      render(<CameraScreen />);
+      try {
+        render(<CameraScreen />);
 
-      act(() => {
-        fireEvent.press(screen.getByText("Record Sign"));
-      });
+        act(() => {
+          fireEvent.press(screen.getByText("Record Sign"));
+        });
 
-      await waitFor(() => {
-        expect(screen.getByText("Recording 5s")).toBeTruthy();
-      });
+        await waitFor(() => {
+          expect(screen.getByText("Recording 5s")).toBeTruthy();
+        });
 
-      // 5s → 4 → 3 → 2 → 1 → (final tick clears interval, shows "Recording" only)
-      act(() => {
-        jest.advanceTimersByTime(5000);
-      });
+        // 5s → 4 → 3 → 2 → 1 → (final tick clears interval, shows "Recording" only)
+        act(() => {
+          jest.advanceTimersByTime(5000);
+        });
 
-      await waitFor(() => {
-        expect(screen.getByText("Recording")).toBeTruthy();
-      });
-      expect(screen.queryByText(/Recording \d+s/)).toBeNull();
-
-      jest.useRealTimers();
-      await act(async () => {
-        resolveRecord({ uri: "file:///mock-video.mp4" });
-      });
+        await waitFor(() => {
+          expect(screen.getByText("Recording")).toBeTruthy();
+        });
+        expect(screen.queryByText(/Recording \d+s/)).toBeNull();
+      } finally {
+        jest.useRealTimers();
+        await act(async () => {
+          resolveRecord({ uri: "file:///mock-video.mp4" });
+        });
+      }
     });
 
     /* --- upload flow with successful prediction --- */
