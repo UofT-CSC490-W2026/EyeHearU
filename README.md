@@ -7,7 +7,7 @@
 This repository hosts **CSC490 milestones** in `a1/` … `a4/` and the **main Eye Hear U application at the repository root** (`backend/`, `ml/`, `mobile/`, `data/`, `infrastructure/`, `docs/`). CI runs from [`.github/workflows/ci.yml`](.github/workflows/ci.yml); each successful run posts **coverage on pull requests** and refreshes the line below on **`main`**.
 
 <!-- COVERAGE_REPORT_START -->
-**Test coverage (CI):** _Numbers update after the next successful run on `main`._ Open the [CI workflow](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml) → latest run → **Coverage (README + PR)** for the table, or each test job’s **Summary**.
+**Test coverage (CI):** Backend **100.00%** · ML **100.00%** · Mobile **100%** lines / **100%** functions — see [this workflow run](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/runs/23675183570).
 <!-- COVERAGE_REPORT_END -->
 
 **A5 (CSC490) submission:** the **`a5/`** folder contains **`a5.pdf`** → [`a5/a5.pdf`](a5/a5.pdf).
