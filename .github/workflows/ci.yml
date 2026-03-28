@@ -1,4 +1,5 @@
 # Backend, ML, and mobile tests + coverage (enforced in CI; summaries in job logs).
+# Posts coverage to PRs and updates README on main via coverage-publish job.
 name: CI
 
 on:
@@ -9,6 +10,9 @@ on:
 
 jobs:
   backend:
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, 'chore(ci): update coverage in README'))
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -41,7 +45,22 @@ jobs:
           echo "## Backend coverage" >> "$GITHUB_STEP_SUMMARY"
           python -m coverage report --precision=2 >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Save coverage text for reporting
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m coverage report --precision=2 | tee "$GITHUB_WORKSPACE/backend-coverage-report.txt"
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend-coverage-report.txt
+
   ml:
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, 'chore(ci): update coverage in README'))
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -73,7 +92,20 @@ jobs:
           echo "## ML coverage" >> "$GITHUB_STEP_SUMMARY"
           python -m coverage report --precision=2 >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Save coverage text for reporting
+        run: |
+          python -m coverage report --precision=2 | tee "$GITHUB_WORKSPACE/ml-coverage-report.txt"
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-coverage
+          path: ml-coverage-report.txt
+
   mobile:
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, 'chore(ci): update coverage in README'))
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -94,10 +126,91 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Run tests with coverage
-        run: npx jest --coverage --ci
+        run: |
+          npx jest --coverage --ci \
+            --coverageReporters=json-summary \
+            --coverageReporters=lcov \
+            --coverageReporters=text
 
       - name: Test summary (job summary)
         if: always()
         run: |
           echo "## Mobile test results" >> "$GITHUB_STEP_SUMMARY"
           echo "See job log for detailed Jest output." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-coverage
+          path: mobile/coverage/coverage-summary.json
+
+  coverage-publish:
+    name: Coverage (README + PR)
+    needs: [backend, ml, mobile]
+    if: |
+      always() &&
+      needs.backend.result == 'success' &&
+      needs.ml.result == 'success' &&
+      needs.mobile.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: cov
+
+      - name: Download ML coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: ml-coverage
+          path: cov
+
+      - name: Download mobile coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile-coverage
+          path: cov-mobile
+
+      - name: Build reports
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 .github/scripts/build_coverage_report.py \
+            cov/backend-coverage-report.txt \
+            cov/ml-coverage-report.txt \
+            cov-mobile/coverage-summary.json \
+            coverage-comment.md \
+            coverage-snippet.md \
+            "$RUN_URL" \
+            README.md
+
+      - name: Push README update (main only)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if git diff --staged --quiet; then
+            echo "README unchanged"
+          else
+            git commit -m "chore(ci): update coverage in README"
+            git push
+          fi
+
+      - name: PR comment (same-repo PRs)
+        if: |
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: coverage-report
+          path: coverage-comment.md
