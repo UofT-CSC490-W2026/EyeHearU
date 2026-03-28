@@ -21,6 +21,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 | End users | [User guide](docs/USER_GUIDE.md) |
 | Developers | [Developer guide](docs/DEVELOPER_GUIDE.md) |
 | Testing & coverage | [Testing](docs/TESTING.md) |
+| CSC490 Assignment 5 (writeup + handout mapping) | [A5 writeup](docs/a5_writeup.md) · PDF in [`a5/a5.pdf`](a5/a5.pdf) |
 | Production deployment | [Production](docs/PRODUCTION.md) |
 | Inference preprocessing | [Preprocessing (I3D)](docs/PREPROCESSING.md) |
 | Evaluation metrics guide | [Evaluation](docs/EVALUATION.md) |
@@ -266,12 +267,12 @@ docker compose up --build
 
 ## Testing
 
-CI runs three parallel jobs on every push/PR to `main`:
+CI runs **three test jobs** in parallel on every push and pull request to `main` or `master`, then a fourth job (**Coverage (README + PR)**) that aggregates reports: it updates the [coverage line near the top of this README](#eye-hear-u) on pushes to `main`/`master` and posts a **sticky coverage comment** on same-repository pull requests ([`.github/scripts/build_coverage_report.py`](.github/scripts/build_coverage_report.py)). See [Testing](docs/TESTING.md) for details and fork limitations.
 
 | Job | Tests | Coverage | Enforced |
 |-----|-------|----------|----------|
 | Backend | 82 pytest | 100% line + branch | `--cov-fail-under=100` |
-| ML | 190+ pytest | 100% line | `--cov-fail-under=100` |
+| ML | 191 pytest | 100% line | `--cov-fail-under=100` |
 | Mobile | 66 Jest | 100% line + function | Jest `coverageThreshold` in `package.json` |
 
 Run locally:

@@ -153,7 +153,17 @@ On every **push** and **pull_request** to `main` or `master`, three jobs run in 
 ### Mobile job
 1. Sets up Node.js **20**
 2. `npm ci --legacy-peer-deps` (working directory **`mobile/**`)
-3. Runs `npx jest --coverage --ci` — fails if coverage falls below **100%** lines or **100%** functions on `app/` and `services/` (see `coverageThreshold` in `mobile/package.json`)
-4. Job **Summary** points at the log for detailed Jest output; `mobile/coverage/` is produced locally when you run Jest with `--coverage`
+3. Runs Jest with `--coverage --ci` and reporters **`json-summary`**, **`lcov`**, and **`text`** (fails if coverage falls below **100%** lines or **100%** functions on `app/` and `services/` — see `coverageThreshold` in `mobile/package.json`)
+4. Uploads `mobile/coverage/coverage-summary.json` as an artifact for the publish job (below)
+5. Job **Summary** points at the log for detailed Jest output; run Jest with `--coverage` locally for HTML under `mobile/coverage/`
 
-CI passes or fails solely on **`--cov-fail-under=100`** (backend and ML) and Jest **`coverageThreshold`** (mobile). There is no third-party coverage dashboard for this repo.
+### Coverage (README + PR) job
+
+After **backend**, **ml**, and **mobile** all succeed, job **`Coverage (README + PR)`** (`coverage-publish`):
+
+1. Downloads the backend and ML text coverage reports and mobile’s `coverage-summary.json`.
+2. Runs **`.github/scripts/build_coverage_report.py`** to build a markdown table (backend **TOTAL** line from `coverage.py`, ML same, mobile lines/functions % from JSON).
+3. **Push to `main` or `master`:** patches the root **README** between `<!-- COVERAGE_REPORT_START -->` and `<!-- COVERAGE_REPORT_END -->`, then commits and pushes as **`chore(ci): update coverage in README`** (the three test jobs skip commits containing that phrase to avoid an infinite workflow loop).
+4. **Pull request** from the **same repository:** updates a **sticky** PR comment via **marocchino/sticky-pull-request-comment@v2**. Fork PRs run tests but typically do not get that comment (token scope).
+
+CI passes or fails on **`--cov-fail-under=100`** (backend and ML) and Jest **`coverageThreshold`** (mobile). Coverage visibility on the README and PRs is entirely from this in-repo automation (no Codecov or similar).
