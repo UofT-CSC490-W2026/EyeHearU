@@ -152,7 +152,7 @@ On every **push** and **pull_request** to `main` or `master`, three jobs run in 
 
 ### Mobile job
 1. Sets up Node.js **20**
-2. `npm ci`
+2. `npm ci --legacy-peer-deps` (working directory **`mobile/**`)
 3. Runs `npx jest --coverage --ci` — fails if coverage falls below **100%** lines or **100%** functions on `app/` and `services/` (see `coverageThreshold` in `mobile/package.json`)
 4. Uploads `mobile/coverage/lcov.info` to Codecov (flag: **`mobile`**) so the dashboard includes frontend with backend and ML
 
