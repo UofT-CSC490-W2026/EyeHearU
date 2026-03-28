@@ -207,28 +207,13 @@ snakeviz ml/profiling/results/predict.prof
 
 The CI workflow ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs three parallel jobs on every push and on every pull request targeting **`main` or `master`**:
 
-| Job     | Command                                                  | Enforcement                                                  | Coverage upload                       |
-| ------- | -------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------- |
-| Backend | `pytest --cov=app --cov-report=xml --cov-fail-under=100` | 100% line and branch on `app/`                               | Codecov (flag: `backend`)             |
-| ML      | `pytest --cov --cov-report=xml --cov-fail-under=100`     | 100% line                                                    | Codecov (flag: `ml`)                  |
-| Mobile  | `npx jest --coverage --ci`                               | 100% line + function (`coverageThreshold` in `package.json`) | Codecov (flag: `mobile`, `lcov.info`) |
+| Job     | Command                                                  | Enforcement                                                  | Reporting in CI                                                    |
+| ------- | -------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Backend | `pytest --cov=app --cov-report=xml --cov-fail-under=100` | 100% line and branch on `app/`                               | Job log + **Summary** (`coverage report`)                          |
+| ML      | `pytest --cov --cov-report=xml --cov-fail-under=100`     | 100% line                                                    | Job log + **Summary** (`coverage report`)                          |
+| Mobile  | `npx jest --coverage --ci`                               | 100% line + function (`coverageThreshold` in `package.json`) | Job log + **Summary** (Jest output; run locally for HTML/`lcov`)  |
 
-### README badge
-
-The README includes a live Codecov badge that updates when CI uploads reports:
-
-```
-[![codecov](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU/branch/main/graph/badge.svg)](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU)
-```
-
-### Codecov PR integration
-
-The [`codecov.yml`](../codecov.yml) configures:
-
-- **Project status:** `target: auto` with a **1%** regression threshold
-- **Patch status:** new code should reach **80%** coverage
-- **Flags:** separate tracking for **`backend`**, **`ml`**, and **`mobile`**, with **carryforward** so partial uploads do not drop the dashboard to zero
-- **PR comments:** layout includes reach, diff, flags, and files
+The README CI badge links to GitHub Actions; reviewers inspect coverage in each job’s log and **Summary** tab.
 
 ### How to generate coverage locally
 

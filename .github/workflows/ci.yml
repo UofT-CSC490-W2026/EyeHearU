@@ -1,5 +1,4 @@
-# Backend, ML, and mobile tests + coverage.
-# Uploads coverage.xml for Codecov PR comments & README badge.
+# Backend, ML, and mobile tests + coverage (enforced in CI; summaries in job logs).
 name: CI
 
 on:
@@ -35,16 +34,6 @@ jobs:
         run: |
           pytest tests/ -v --cov=app --cov-report=xml --cov-report=term --cov-fail-under=100
 
-      - name: Upload coverage report (Codecov)
-        if: always()
-        uses: codecov/codecov-action@v5
-        with:
-          files: backend/coverage.xml
-          flags: backend
-          name: backend
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-
       - name: Coverage summary (job summary)
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -79,16 +68,6 @@ jobs:
             --cov --cov-report=xml --cov-report=term-missing \
             --cov-fail-under=100
 
-      - name: Upload coverage report (Codecov)
-        if: always()
-        uses: codecov/codecov-action@v5
-        with:
-          files: ml/coverage.xml
-          flags: ml
-          name: ml
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-
       - name: Coverage summary (job summary)
         run: |
           echo "## ML coverage" >> "$GITHUB_STEP_SUMMARY"
@@ -116,16 +95,6 @@ jobs:
 
       - name: Run tests with coverage
         run: npx jest --coverage --ci
-
-      - name: Upload coverage report (Codecov)
-        if: always()
-        uses: codecov/codecov-action@v5
-        with:
-          files: mobile/coverage/lcov.info
-          flags: mobile
-          name: mobile
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Test summary (job summary)
         if: always()

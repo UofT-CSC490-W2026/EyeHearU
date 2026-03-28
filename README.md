@@ -1,20 +1,12 @@
 ## Eye Hear U
 
 [![CI](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU/branch/main/graph/badge.svg)](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU)
 
 **Real-time ASL-to-English translation on iOS** — one sign at a time.
 
-This repository hosts **CSC490 milestones** in `a1/` … `a4/` and the **main Eye Hear U application at the repository root** (`backend/`, `ml/`, `mobile/`, `data/`, `infrastructure/`, `docs/`). CI runs from [`.github/workflows/ci.yml`](.github/workflows/ci.yml); coverage uploads use [`codecov.yml`](codecov.yml) (see **Codecov setup** below).
+This repository hosts **CSC490 milestones** in `a1/` … `a4/` and the **main Eye Hear U application at the repository root** (`backend/`, `ml/`, `mobile/`, `data/`, `infrastructure/`, `docs/`). CI runs from [`.github/workflows/ci.yml`](.github/workflows/ci.yml). For **coverage**, open a workflow run in GitHub → each **backend** / **ml** / **mobile** job → **Summary** (and logs for pytest/Jest output).
 
 **A5 (CSC490) submission:** the **`a5/`** folder contains **`a5.pdf`** → [`a5/a5.pdf`](a5/a5.pdf).
-
-### Codecov setup (org repos, README badge, PR comments)
-
-- **Why you might not see `UofT-CSC490-W2026/EyeHearU` in Codecov:** the project only appears after Codecov can access the repo. For **GitHub organizations**, a user with **admin** on the org or repo must (1) sign in at [codecov.io](https://codecov.io) with GitHub, (2) **approve the Codecov GitHub App** for the **UofT-CSC490-W2026** organization (GitHub → Organization settings → Third-party access / GitHub Apps), and (3) enable the **EyeHearU** repository in Codecov. You do **not** need to be the repo creator; you need someone who can install apps or add **repository secrets**.
-- **Repository secret:** In **GitHub → the repo → Settings → Secrets and variables → Actions**, add **`CODECOV_TOKEN`** from Codecov (repo → Settings → General → Repository upload token). Alternatively, an org owner can add the same secret at **organization** level so all course repos can use it.
-- **README badge:** The badge URL points at `codecov.io/gh/UofT-CSC490-W2026/EyeHearU/...`. It stays “unknown” until at least one successful upload from **`main`** (after merge). Forks and PRs from forks have extra limitations unless Codecov is configured for them.
-- **PR comments:** Codecov posts on PRs only after the app is installed, the token is set (or OIDC is configured), and uploads succeed. Until then, coverage is still generated in **GitHub Actions**: open the PR → **Checks** tab → **CI** workflow → each job (**backend** / **ml** / **mobile**) → expand **Run tests with coverage** and the job **Summary** (backend/ml include a `coverage report` table).
 
 Eye Hear U translates isolated American Sign Language (ASL) signs into English text and speech using a mobile app, a backend inference API, and a video classifier trained on public ASL datasets. Infrastructure is provisioned on AWS via Terraform.
 
@@ -33,7 +25,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 | Modal / AWS migration | [Ops Migration Tutorial](docs/ops_migration_modal_sft_tutorial.md) |
 | Profiling analysis | [Profiling](docs/PROFILING.md) |
 
-CI uploads **three** reports (`backend`, `ml`, `mobile`) when Codecov is configured (see **Codecov setup** above). Path fixes in `codecov.yml` map Jest’s paths under `mobile/`. Coverage gates (**100%** backend/ML pytest, **100%** mobile Jest thresholds) are enforced in CI regardless of Codecov.
+Coverage gates (**100%** backend/ML pytest, **100%** mobile Jest thresholds) are enforced in CI on every push and pull request to `main` or `master`.
 
 ---
 

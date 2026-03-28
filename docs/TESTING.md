@@ -33,7 +33,7 @@ pytest tests/ --cov=app --cov-report=html
 open htmlcov/index.html    # macOS
 ```
 
-### Coverage (XML for Codecov / CI)
+### Coverage (XML for artifacts / local tooling)
 
 ```bash
 pytest tests/ --cov=app --cov-report=xml
@@ -142,35 +142,18 @@ On every **push** and **pull_request** to `main` or `master`, three jobs run in 
 1. Sets up Python **3.11**
 2. `pip install -r backend/requirements.txt`
 3. Runs `pytest` — fails if coverage **< 100%**
-4. Uploads `backend/coverage.xml` to Codecov
+4. Writes `coverage report` to the job **Summary** (and leaves `backend/coverage.xml` in the workspace for the run)
 
 ### ML job
 1. Sets up Python **3.11**
 2. `pip install -r ml/requirements.txt` + pytest-cov
 3. Runs `pytest` with `.coveragerc` config — fails if coverage **< 100%**
-4. Uploads `ml/coverage.xml` to Codecov
+4. Same as backend: **Summary** plus `ml/coverage.xml`
 
 ### Mobile job
 1. Sets up Node.js **20**
 2. `npm ci --legacy-peer-deps` (working directory **`mobile/**`)
 3. Runs `npx jest --coverage --ci` — fails if coverage falls below **100%** lines or **100%** functions on `app/` and `services/` (see `coverageThreshold` in `mobile/package.json`)
-4. Uploads `mobile/coverage/lcov.info` to Codecov (flag: **`mobile`**) so the dashboard includes frontend with backend and ML
+4. Job **Summary** points at the log for detailed Jest output; `mobile/coverage/` is produced locally when you run Jest with `--coverage`
 
-`codecov.yml` defines flags for **`backend`**, **`ml`**, and **`mobile`**, plus **`fixes`** so Jest’s `SF:app/...` and `SF:services/...` paths resolve under `mobile/` in the UI.
-
-### Codecov setup (README badge + PR comments)
-
-1. Sign in at [codecov.io](https://about.codecov.io/) with GitHub.
-2. Enable the **EyeHearU** repository.
-3. In GitHub: **Settings → Secrets and variables → Actions** → add **`CODECOV_TOKEN`**.
-4. Open a PR — after all three jobs upload, Codecov merges reports and comments with per-flag coverage (wait is configured via `codecov.notify.after_n_builds: 3`).
-
-The README badge URL:
-
-`https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU/branch/main/graph/badge.svg`
-
-…updates once Codecov has processed `main`.
-
-### Without Codecov
-
-CI still passes or fails on **`--cov-fail-under=100`** (backend and ML) and Jest **`coverageThreshold`** (mobile). The external badge and PR bot are omitted until `CODECOV_TOKEN` is configured.
+CI passes or fails solely on **`--cov-fail-under=100`** (backend and ML) and Jest **`coverageThreshold`** (mobile). There is no third-party coverage dashboard for this repo.
