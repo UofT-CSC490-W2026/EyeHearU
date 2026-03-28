@@ -1,0 +1,10 @@
+{
+  "name": "a5-md-to-pdf",
+  "private": true,
+  "type": "module",
+  "description": "Render docs/a5_writeup.md to PDF via Puppeteer",
+  "dependencies": {
+    "marked": "^15.0.6",
+    "puppeteer": "^24.2.0"
+  }
+}
