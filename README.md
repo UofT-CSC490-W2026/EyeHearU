@@ -1,20 +1,16 @@
 ## Eye Hear U
 
 [![CI](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU/branch/main/graph/badge.svg)](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU)
 
 **Real-time ASL-to-English translation on iOS** — one sign at a time.
 
-This repository hosts **CSC490 milestones** in `a1/` … `a4/` and the **main Eye Hear U application at the repository root** (`backend/`, `ml/`, `mobile/`, `data/`, `infrastructure/`, `docs/`). CI runs from [`.github/workflows/ci.yml`](.github/workflows/ci.yml); coverage uploads use [`codecov.yml`](codecov.yml) (see **Codecov setup** below).
+This repository hosts **CSC490 milestones** in `a1/` … `a4/` and the **main Eye Hear U application at the repository root** (`backend/`, `ml/`, `mobile/`, `data/`, `infrastructure/`, `docs/`). CI runs from [`.github/workflows/ci.yml`](.github/workflows/ci.yml); each successful run posts **coverage on pull requests** and refreshes the line below on **`main`**.
+
+<!-- COVERAGE_REPORT_START -->
+**Test coverage (CI):** _Numbers update after the next successful run on `main`._ Open the [CI workflow](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml) → latest run → **Coverage (README + PR)** for the table, or each test job’s **Summary**.
+<!-- COVERAGE_REPORT_END -->
 
 **A5 (CSC490) submission:** the **`a5/`** folder contains **`a5.pdf`** → [`a5/a5.pdf`](a5/a5.pdf).
-
-### Codecov setup (org repos, README badge, PR comments)
-
-- **Why you might not see `UofT-CSC490-W2026/EyeHearU` in Codecov:** the project only appears after Codecov can access the repo. For **GitHub organizations**, a user with **admin** on the org or repo must (1) sign in at [codecov.io](https://codecov.io) with GitHub, (2) **approve the Codecov GitHub App** for the **UofT-CSC490-W2026** organization (GitHub → Organization settings → Third-party access / GitHub Apps), and (3) enable the **EyeHearU** repository in Codecov. You do **not** need to be the repo creator; you need someone who can install apps or add **repository secrets**.
-- **Repository secret:** In **GitHub → the repo → Settings → Secrets and variables → Actions**, add **`CODECOV_TOKEN`** from Codecov (repo → Settings → General → Repository upload token). Alternatively, an org owner can add the same secret at **organization** level so all course repos can use it.
-- **README badge:** The badge URL points at `codecov.io/gh/UofT-CSC490-W2026/EyeHearU/...`. It stays “unknown” until at least one successful upload from **`main`** (after merge). Forks and PRs from forks have extra limitations unless Codecov is configured for them.
-- **PR comments:** Codecov posts on PRs only after the app is installed, the token is set (or OIDC is configured), and uploads succeed. Until then, coverage is still generated in **GitHub Actions**: open the PR → **Checks** tab → **CI** workflow → each job (**backend** / **ml** / **mobile**) → expand **Run tests with coverage** and the job **Summary** (backend/ml include a `coverage report` table).
 
 Eye Hear U translates isolated American Sign Language (ASL) signs into English text and speech using a mobile app, a backend inference API, and a video classifier trained on public ASL datasets. Infrastructure is provisioned on AWS via Terraform.
 
@@ -25,6 +21,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 | End users | [User guide](docs/USER_GUIDE.md) |
 | Developers | [Developer guide](docs/DEVELOPER_GUIDE.md) |
 | Testing & coverage | [Testing](docs/TESTING.md) |
+| CSC490 Assignment 5 (writeup + handout mapping) | [A5 writeup](docs/a5_writeup.md) · PDF in [`a5/a5.pdf`](a5/a5.pdf) |
 | Production deployment | [Production](docs/PRODUCTION.md) |
 | Inference preprocessing | [Preprocessing (I3D)](docs/PREPROCESSING.md) |
 | Evaluation metrics guide | [Evaluation](docs/EVALUATION.md) |
@@ -33,7 +30,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 | Modal / AWS migration | [Ops Migration Tutorial](docs/ops_migration_modal_sft_tutorial.md) |
 | Profiling analysis | [Profiling](docs/PROFILING.md) |
 
-CI uploads **three** reports (`backend`, `ml`, `mobile`) when Codecov is configured (see **Codecov setup** above). Path fixes in `codecov.yml` map Jest’s paths under `mobile/`. Coverage gates (**100%** backend/ML pytest, **100%** mobile Jest thresholds) are enforced in CI regardless of Codecov.
+Coverage gates (**100%** backend/ML pytest, **100%** mobile Jest thresholds) are enforced in CI on every push and pull request to `main` or `master`.
 
 ---
 
@@ -270,12 +267,12 @@ docker compose up --build
 
 ## Testing
 
-CI runs three parallel jobs on every push/PR to `main`:
+CI runs **three test jobs** in parallel on every push and pull request to `main` or `master`, then a fourth job (**Coverage (README + PR)**) that aggregates reports: it updates the [coverage line near the top of this README](#eye-hear-u) on pushes to `main`/`master` and posts a **sticky coverage comment** on same-repository pull requests ([`.github/scripts/build_coverage_report.py`](.github/scripts/build_coverage_report.py)). See [Testing](docs/TESTING.md) for details and fork limitations.
 
 | Job | Tests | Coverage | Enforced |
 |-----|-------|----------|----------|
 | Backend | 82 pytest | 100% line + branch | `--cov-fail-under=100` |
-| ML | 190+ pytest | 100% line | `--cov-fail-under=100` |
+| ML | 191 pytest | 100% line | `--cov-fail-under=100` |
 | Mobile | 66 Jest | 100% line + function | Jest `coverageThreshold` in `package.json` |
 
 Run locally:

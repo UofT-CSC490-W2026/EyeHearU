@@ -7,8 +7,6 @@
 | Siyi Zhu    | 1008793076     |
 | Chloe Yang  | 1009261433     |
 
-**Course submission PDF (handout):** repository path **`a5/a5.pdf`** (the `a5/` directory should contain only that PDF; see `a5/.gitignore`).
-
 ---
 
 ## Part One: Profiling Execution Time
@@ -205,30 +203,21 @@ snakeviz ml/profiling/results/predict.prof
 
 ### GitHub Actions workflow
 
-The CI workflow ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs three parallel jobs on every push and on every pull request targeting **`main` or `master`**:
+The CI workflow ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs **three parallel test jobs** on every push and on every pull request targeting **`main` or `master`**, then a fourth job when all three succeed:
 
-| Job     | Command                                                  | Enforcement                                                  | Coverage upload                       |
-| ------- | -------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------- |
-| Backend | `pytest --cov=app --cov-report=xml --cov-fail-under=100` | 100% line and branch on `app/`                               | Codecov (flag: `backend`)             |
-| ML      | `pytest --cov --cov-report=xml --cov-fail-under=100`     | 100% line                                                    | Codecov (flag: `ml`)                  |
-| Mobile  | `npx jest --coverage --ci`                               | 100% line + function (`coverageThreshold` in `package.json`) | Codecov (flag: `mobile`, `lcov.info`) |
+| Job     | Command                                                      | Enforcement                                                  | Reporting in GitHub                                                |
+| ------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Backend | `pytest --cov=app --cov-report=xml --cov-fail-under=100`     | 100% line and branch on `app/`                             | Job log + **Summary** (`coverage report`)                          |
+| ML      | `pytest --cov --cov-report=xml --cov-fail-under=100`         | 100% line                                                    | Job log + **Summary** (`coverage report`)                          |
+| Mobile  | `npx jest --coverage --ci` + `json-summary` / `lcov` / `text` reporters | 100% line + function (`coverageThreshold` in `package.json`) | Job log + **Summary**; `coverage-summary.json` consumed by publish job |
+| **Coverage** | *(after artifacts from the three jobs above)*  | *(no separate tests)*  | See below                                                          |
 
-### README badge
+**Publishing coverage:** the **`coverage-publish`** job downloads artifacts (pytest text summaries and Jest `coverage-summary.json`), runs [`.github/scripts/build_coverage_report.py`](../.github/scripts/build_coverage_report.py), then:
 
-The README includes a live Codecov badge that updates when CI uploads reports:
+- **Push to `main`:** rewrites the root [README](../README.md) between `<!-- COVERAGE_REPORT_START -->` and `<!-- COVERAGE_REPORT_END -->` with the latest percentages and a link to that workflow run, and pushes commit **`chore(ci): update coverage in README`** as `github-actions[bot]`. Commits with that message **skip** the three test jobs so the bot does not loop CI forever.
+- **Pull requests (branch on the same repo):** posts or updates one **sticky** comment ( [`marocchino/sticky-pull-request-comment`](https://github.com/marocchino/sticky-pull-request-comment) ) with a markdown coverage table. PRs from **forks** still run tests; the comment step is skipped because the default token cannot write to fork PRs.
 
-```
-[![codecov](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU/branch/main/graph/badge.svg)](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU)
-```
-
-### Codecov PR integration
-
-The [`codecov.yml`](../codecov.yml) configures:
-
-- **Project status:** `target: auto` with a **1%** regression threshold
-- **Patch status:** new code should reach **80%** coverage
-- **Flags:** separate tracking for **`backend`**, **`ml`**, and **`mobile`**, with **carryforward** so partial uploads do not drop the dashboard to zero
-- **PR comments:** layout includes reach, diff, flags, and files
+The README CI badge links to GitHub Actions. Reviewers can also use each test job’s log and **Summary** tab.
 
 ### How to generate coverage locally
 

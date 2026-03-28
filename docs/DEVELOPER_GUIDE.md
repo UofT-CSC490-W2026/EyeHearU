@@ -158,4 +158,4 @@ Training lives on branch **`freya-a5-training`**. Inference must stay aligned:
 ## Git workflow
 
 - Run **tests** before pushing: see [TESTING.md](TESTING.md).
-- CI runs on **push/PR** to `main`/`master` (`.github/workflows/ci.yml`).
+- CI runs on **push/PR** to `main`/`master` (`.github/workflows/ci.yml`): three test jobs (backend, ML, mobile), then **Coverage (README + PR)** which refreshes the coverage snippet on the root README on `main`/`master` and adds a sticky coverage comment on same-repo pull requests — details in [TESTING.md](TESTING.md) (*Coverage (README + PR) job*).

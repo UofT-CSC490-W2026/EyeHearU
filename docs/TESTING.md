@@ -33,7 +33,7 @@ pytest tests/ --cov=app --cov-report=html
 open htmlcov/index.html    # macOS
 ```
 
-### Coverage (XML for Codecov / CI)
+### Coverage (XML for artifacts / local tooling)
 
 ```bash
 pytest tests/ --cov=app --cov-report=xml
@@ -142,35 +142,28 @@ On every **push** and **pull_request** to `main` or `master`, three jobs run in 
 1. Sets up Python **3.11**
 2. `pip install -r backend/requirements.txt`
 3. Runs `pytest` — fails if coverage **< 100%**
-4. Uploads `backend/coverage.xml` to Codecov
+4. Writes `coverage report` to the job **Summary** (and leaves `backend/coverage.xml` in the workspace for the run)
 
 ### ML job
 1. Sets up Python **3.11**
 2. `pip install -r ml/requirements.txt` + pytest-cov
 3. Runs `pytest` with `.coveragerc` config — fails if coverage **< 100%**
-4. Uploads `ml/coverage.xml` to Codecov
+4. Same as backend: **Summary** plus `ml/coverage.xml`
 
 ### Mobile job
 1. Sets up Node.js **20**
 2. `npm ci --legacy-peer-deps` (working directory **`mobile/**`)
-3. Runs `npx jest --coverage --ci` — fails if coverage falls below **100%** lines or **100%** functions on `app/` and `services/` (see `coverageThreshold` in `mobile/package.json`)
-4. Uploads `mobile/coverage/lcov.info` to Codecov (flag: **`mobile`**) so the dashboard includes frontend with backend and ML
+3. Runs Jest with `--coverage --ci` and reporters **`json-summary`**, **`lcov`**, and **`text`** (fails if coverage falls below **100%** lines or **100%** functions on `app/` and `services/` — see `coverageThreshold` in `mobile/package.json`)
+4. Uploads `mobile/coverage/coverage-summary.json` as an artifact for the publish job (below)
+5. Job **Summary** points at the log for detailed Jest output; run Jest with `--coverage` locally for HTML under `mobile/coverage/`
 
-`codecov.yml` defines flags for **`backend`**, **`ml`**, and **`mobile`**, plus **`fixes`** so Jest’s `SF:app/...` and `SF:services/...` paths resolve under `mobile/` in the UI.
+### Coverage (README + PR) job
 
-### Codecov setup (README badge + PR comments)
+After **backend**, **ml**, and **mobile** all succeed, job **`Coverage (README + PR)`** (`coverage-publish`):
 
-1. Sign in at [codecov.io](https://about.codecov.io/) with GitHub.
-2. Enable the **EyeHearU** repository.
-3. In GitHub: **Settings → Secrets and variables → Actions** → add **`CODECOV_TOKEN`**.
-4. Open a PR — after all three jobs upload, Codecov merges reports and comments with per-flag coverage (wait is configured via `codecov.notify.after_n_builds: 3`).
+1. Downloads the backend and ML text coverage reports and mobile’s `coverage-summary.json`.
+2. Runs **`.github/scripts/build_coverage_report.py`** to build a markdown table (backend **TOTAL** line from `coverage.py`, ML same, mobile lines/functions % from JSON).
+3. **Push to `main` or `master`:** patches the root **README** between `<!-- COVERAGE_REPORT_START -->` and `<!-- COVERAGE_REPORT_END -->`, then commits and pushes as **`chore(ci): update coverage in README`** (the three test jobs skip commits containing that phrase to avoid an infinite workflow loop).
+4. **Pull request** from the **same repository:** updates a **sticky** PR comment via **marocchino/sticky-pull-request-comment@v2**. Fork PRs run tests but typically do not get that comment (token scope).
 
-The README badge URL:
-
-`https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU/branch/main/graph/badge.svg`
-
-…updates once Codecov has processed `main`.
-
-### Without Codecov
-
-CI still passes or fails on **`--cov-fail-under=100`** (backend and ML) and Jest **`coverageThreshold`** (mobile). The external badge and PR bot are omitted until `CODECOV_TOKEN` is configured.
+CI passes or fails on **`--cov-fail-under=100`** (backend and ML) and Jest **`coverageThreshold`** (mobile). Coverage visibility on the README and PRs is entirely from this in-repo automation (no Codecov or similar).
