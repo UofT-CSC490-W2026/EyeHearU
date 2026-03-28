@@ -7,17 +7,7 @@
 | Siyi Zhu    | 1008793076     |
 | Chloe Yang  | 1009261433     |
 
-**Course submission PDF (handout):** repository path **`a5/a5.pdf`** (the `a5/` directory should contain only that PDF; see `a5/.gitignore`). Per the handout, **Part Five** video links are included in that PDF as well as in [Part Five](#part-five-two-memorable-bugs) below.
-
-### Handout mapping (where each part lives)
-
-| Handout | Repository location |
-|--------|---------------------|
-| **Part 1** — Profiling | [Part One](#part-one-profiling-execution-time) below; [`ml/profiling/profile_functions.py`](../ml/profiling/profile_functions.py); deeper notes in [`docs/PROFILING.md`](PROFILING.md) |
-| **Part 2** — pytest-cov / similar + **GitHub workflow** for README & PRs | [Part Two](#part-two-code-coverage) below; [`.github/workflows/ci.yml`](../.github/workflows/ci.yml); [`.github/scripts/build_coverage_report.py`](../.github/scripts/build_coverage_report.py); dynamic line in the root [README](../README.md) between `COVERAGE_REPORT` markers |
-| **Part 3** — Coverage breadth (marks tied to %) | [Part Three](#part-three-test-coverage-breadth); suites under `backend/tests/`, `ml/tests/`, `mobile/__tests__/` |
-| **Part 4** — Depth (complex module + ≥10 edge-case tests, commented) | [Part Four](#part-four-test-coverage-depth); module [`backend/app/services/preprocessing.py`](../backend/app/services/preprocessing.py); tests [`backend/tests/test_preprocessing_depth.py`](../backend/tests/test_preprocessing_depth.py) (16 tests; module + per-test docstrings) |
-| **Part 5** — Two memorable bugs (video) | [Part Five](#part-five-two-memorable-bugs); recordings linked from **`a5/a5.pdf`** |
+**Course submission PDF (handout):** repository path **`a5/a5.pdf`** (the `a5/` directory should contain only that PDF; see `a5/.gitignore`). 
 
 ---
 
@@ -224,7 +214,7 @@ The CI workflow ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs
 | Mobile  | `npx jest --coverage --ci` + `json-summary` / `lcov` / `text` reporters | 100% line + function (`coverageThreshold` in `package.json`) | Job log + **Summary**; `coverage-summary.json` consumed by publish job |
 | **Coverage (README + PR)** | *(after artifacts from the three jobs above)*  | *(no separate tests)*  | See below                                                          |
 
-**Publishing coverage (course Part Two — README and PRs):** the **`coverage-publish`** job downloads artifacts (pytest text summaries and Jest `coverage-summary.json`), runs [`.github/scripts/build_coverage_report.py`](../.github/scripts/build_coverage_report.py), then:
+**Publishing coverage:** the **`coverage-publish`** job downloads artifacts (pytest text summaries and Jest `coverage-summary.json`), runs [`.github/scripts/build_coverage_report.py`](../.github/scripts/build_coverage_report.py), then:
 
 - **Push to `main` or `master`:** rewrites the root [README](../README.md) between `<!-- COVERAGE_REPORT_START -->` and `<!-- COVERAGE_REPORT_END -->` with the latest percentages and a link to that workflow run, and pushes commit **`chore(ci): update coverage in README`** as `github-actions[bot]`. Commits with that message **skip** the three test jobs so the bot does not loop CI forever.
 - **Pull requests (branch on the same repo):** posts or updates one **sticky** comment ( [`marocchino/sticky-pull-request-comment`](https://github.com/marocchino/sticky-pull-request-comment) ) with a markdown coverage table. PRs from **forks** still run tests; the comment step is skipped because the default token cannot write to fork PRs.
