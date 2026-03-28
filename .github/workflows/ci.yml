@@ -1,5 +1,5 @@
-# Backend, ML, and mobile tests + coverage (paths under a5/).
-# Uploads coverage for Codecov PR comments & README badge.
+# Backend, ML, and mobile tests + coverage.
+# Uploads coverage.xml for Codecov PR comments & README badge.
 name: CI
 
 on:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: a5/backend
+        working-directory: backend
 
     steps:
       - name: Checkout
@@ -31,7 +31,7 @@ jobs:
 
       - name: Run tests with coverage
         env:
-          PYTHONPATH: ${{ github.workspace }}/a5
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           pytest tests/ -v --cov=app --cov-report=xml --cov-report=term --cov-fail-under=100
 
@@ -39,7 +39,7 @@ jobs:
         if: always()
         uses: codecov/codecov-action@v5
         with:
-          files: a5/backend/coverage.xml
+          files: backend/coverage.xml
           flags: backend
           name: backend
           fail_ci_if_error: false
@@ -47,7 +47,7 @@ jobs:
 
       - name: Coverage summary (job summary)
         env:
-          PYTHONPATH: ${{ github.workspace }}/a5
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "## Backend coverage" >> "$GITHUB_STEP_SUMMARY"
           python -m coverage report --precision=2 >> "$GITHUB_STEP_SUMMARY"
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: a5/ml
+        working-directory: ml
 
     steps:
       - name: Checkout
@@ -83,7 +83,7 @@ jobs:
         if: always()
         uses: codecov/codecov-action@v5
         with:
-          files: a5/ml/coverage.xml
+          files: ml/coverage.xml
           flags: ml
           name: ml
           fail_ci_if_error: false
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: a5/mobile
+        working-directory: mobile
 
     steps:
       - name: Checkout
@@ -109,7 +109,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: a5/mobile/package-lock.json
+          cache-dependency-path: mobile/package-lock.json
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
@@ -121,7 +121,7 @@ jobs:
         if: always()
         uses: codecov/codecov-action@v5
         with:
-          files: a5/mobile/coverage/lcov.info
+          files: mobile/coverage/lcov.info
           flags: mobile
           name: mobile
           fail_ci_if_error: false
