@@ -1,136 +1,294 @@
-# Eye Hear U
+## Eye Hear U
 
-**Real-time ASL-to-English translation on iOS** 
+[![CI](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU/branch/main/graph/badge.svg)](https://codecov.io/gh/UofT-CSC490-W2026/EyeHearU)
 
-Eye Hear U translates isolated American Sign Language (ASL) signs into English text and speech using a mobile app, a backend inference API, and a video classifier trained on public ASL datasets. This repository contains deliverables for CSC490 assignments A1, A2, and A3.
+**Real-time ASL-to-English translation on iOS** — one sign at a time.
 
----
+This repository hosts **CSC490 milestones** in `a1/` … `a4/` and the **main Eye Hear U application at the repository root** (`backend/`, `ml/`, `mobile/`, `data/`, `infrastructure/`, `docs/`). CI runs from [`.github/workflows/ci.yml`](.github/workflows/ci.yml); coverage uploads use [`codecov.yml`](codecov.yml) (see **Codecov setup** below).
 
-## Assignments Overview
+**A5 (CSC490) submission:** the **`a5/`** folder contains **`a5.pdf`** → [`a5/a5.pdf`](a5/a5.pdf).
 
-| Assignment | Focus | Contents |
-|------------|-------|----------|
-| **A1** | Project proposal and planning | Initial project idea, problem statement, and team planning |
-| **A2** | Full-stack ASL app + infrastructure | Datasets, architecture, data pipeline, Terraform IaC, backend, mobile, ML |
-| **A3** | LLM ablations on Modal | Nanochat baseline + SwiGLU / RMSNorm ablations, cloud training |
+### Codecov setup (org repos, README badge, PR comments)
 
----
+- **Why you might not see `UofT-CSC490-W2026/EyeHearU` in Codecov:** the project only appears after Codecov can access the repo. For **GitHub organizations**, a user with **admin** on the org or repo must (1) sign in at [codecov.io](https://codecov.io) with GitHub, (2) **approve the Codecov GitHub App** for the **UofT-CSC490-W2026** organization (GitHub → Organization settings → Third-party access / GitHub Apps), and (3) enable the **EyeHearU** repository in Codecov. You do **not** need to be the repo creator; you need someone who can install apps or add **repository secrets**.
+- **Repository secret:** In **GitHub → the repo → Settings → Secrets and variables → Actions**, add **`CODECOV_TOKEN`** from Codecov (repo → Settings → General → Repository upload token). Alternatively, an org owner can add the same secret at **organization** level so all course repos can use it.
+- **README badge:** The badge URL points at `codecov.io/gh/UofT-CSC490-W2026/EyeHearU/...`. It stays “unknown” until at least one successful upload from **`main`** (after merge). Forks and PRs from forks have extra limitations unless Codecov is configured for them.
+- **PR comments:** Codecov posts on PRs only after the app is installed, the token is set (or OIDC is configured), and uploads succeed. Until then, coverage is still generated in **GitHub Actions**: open the PR → **Checks** tab → **CI** workflow → each job (**backend** / **ml** / **mobile**) → expand **Run tests with coverage** and the job **Summary** (backend/ml include a `coverage report` table).
 
-### A1 — Project Proposal
+Eye Hear U translates isolated American Sign Language (ASL) signs into English text and speech using a mobile app, a backend inference API, and a video classifier trained on public ASL datasets. Infrastructure is provisioned on AWS via Terraform.
 
-- **Location:** `a1/`
-- **Deliverables:** Project proposal document (`a1.pdf`)
-- Defines the problem (no simple real-time ASL-to-English tool), target users, and high-level solution approach.
+### Documentation
 
----
+| Audience | Document |
+|----------|----------|
+| End users | [User guide](docs/USER_GUIDE.md) |
+| Developers | [Developer guide](docs/DEVELOPER_GUIDE.md) |
+| Testing & coverage | [Testing](docs/TESTING.md) |
+| Production deployment | [Production](docs/PRODUCTION.md) |
+| Inference preprocessing | [Preprocessing (I3D)](docs/PREPROCESSING.md) |
+| Evaluation metrics guide | [Evaluation](docs/EVALUATION.md) |
+| Benchmarking & evaluation | [Benchmarking](docs/BENCHMARKING.md) |
+| I3D training (S3 repro) | [I3D S3 Repro Guide](docs/i3d_s3_repro_guide.md) |
+| Modal / AWS migration | [Ops Migration Tutorial](docs/ops_migration_modal_sft_tutorial.md) |
+| Profiling analysis | [Profiling](docs/PROFILING.md) |
 
-### A2 — Eye Hear U: Datasets, Architecture & Data Pipeline
-
-- **Location:** `a2/`
-- **Parts:**
-  - **Part 1:** Aspirational datasets & schemas — ideal training/eval data for isolated signs and mobile-captured scenarios
-  - **Part 2:** System architecture — mobile app, FastAPI backend, 3D CNN classifier, Firebase, AWS
-  - **Part 3:** Data pipeline — ingestion (ASL Citizen, WLASL, MS-ASL), preprocessing, unified dataset, validation
-  - **Part 5:** Disaster recovery — Terraform state, S3, DynamoDB locks
-- **Components:**
-  - `backend/` — FastAPI inference API
-  - `mobile/` — React Native (Expo) iOS app
-  - `ml/` — PyTorch video classifier (3D CNN / R3D-18)
-  - `data/` — Data pipeline scripts (ingest, preprocess, build dataset)
-  - `infrastructure/` — Terraform modules (S3, ECR, Batch, ECS, IAM, networking, monitoring)
-  - `docs/` — `architecture.md`, `data_schema.md`, `data_pipeline.md`, `a2_writeup.md`, `terraform_guide.md`
+CI uploads **three** reports (`backend`, `ml`, `mobile`) when Codecov is configured (see **Codecov setup** above). Path fixes in `codecov.yml` map Jest’s paths under `mobile/`. Coverage gates (**100%** backend/ML pytest, **100%** mobile Jest thresholds) are enforced in CI regardless of Codecov.
 
 ---
 
-### A3 — Nanochat Ablations on Modal
+## Architecture Overview
 
-- **Location:** `a3/nanochat-modal/`
-- **Focus:** Ablation studies on Karpathy’s [nanochat](https://github.com/karpathy/nanochat) — baseline (ReLU²) vs SwiGLU and Learnable RMSNorm.
-- **Deliverables:**
-  - `nanochat_modal.py` — Modal app for data staging, tokenizer, pretrain, and eval
-  - `ablation_swiglu/` — SwiGLU model and training entry
-  - `ablation_rmsnorm/` — Learnable RMSNorm model and training entry
-- **Setup:** Clone nanochat into the repo, install `uv` + Modal, configure secrets. See `a3/nanochat-modal/README.md`.
+```
+┌──────────────────────┐        ┌──────────────────────────────────────┐
+│   Mobile App         │  HTTP  │   Inference API                      │
+│   (React Native /    │───────▶│   (FastAPI on ECS Fargate behind ALB)│
+│    Expo)             │        │                                      │
+│                      │        │   POST /api/v1/predict               │
+│  - Camera capture    │◀───────│   → sign label + confidence          │
+│  - Display results   │  JSON  │                                      │
+│  - Text-to-speech    │        │   Loads I3D model from S3 at startup │
+│  - Translation       │        └─────────────────┬────────────────────┘
+│    history           │                          │
+└──────────────────────┘                          │
+                                       ┌──────────▼──────────┐
+                                       │   ML Model          │
+                                       │   (PyTorch)         │
+                                       │                     │
+                                       │   Inception I3D     │
+                                       │   (spatiotemporal   │
+                                       │    3D CNN)          │
+                                       │        ↓            │
+                                       │   Classification    │
+                                       │   (856 glosses)     │
+                                       └─────────────────────┘
 
----
+  ┌─────────────────────┐   ┌────────────────────┐   ┌──────────────────┐
+  │   Amazon S3         │   │   Firebase         │   │   CloudWatch     │
+  │   (Data Lake)       │   │   (Firestore)      │   │   (Logs/Alerts)  │
+  │                     │   │                    │   │                  │
+  │   raw/ → processed/ │   │   - Translation    │   │   - Pipeline     │
+  │   → models/         │   │     history        │   │     metrics      │
+  │                     │   │   - User feedback  │   │   - API latency  │
+  └─────────────────────┘   └────────────────────┘   └──────────────────┘
+```
+
+### Model
+
+The deployed model is **Microsoft's Inception I3D** (spatiotemporal 3D CNN), fine-tuned on 856 ASL gloss classes from the ASL Citizen dataset. Key specifications:
+
+| Property | Value |
+|----------|-------|
+| Architecture | Inception I3D (`ml/i3d_msft/pytorch_i3d.py`) |
+| Input | `(1, 3, 64, 224, 224)` — 64 RGB frames at 224x224 |
+| Normalization | `[-1, 1]` pixel range |
+| Output | 856-class logits, temporally max-pooled |
+| Label map | `ml/i3d_label_map_mvp-sft-full-v1.json` |
+| Weights | S3: `s3://eye-hear-u-public-data-ca1/models/i3d/...` (auto-downloaded by backend) |
+| Preprocessing | Short-side-256 resize, center-crop 224x224 (`backend/app/services/preprocessing.py`) |
+
+## Datasets
+
+| Dataset | Role | Size |
+|---|---|---|
+| **ASL Citizen** | Primary (train / val / test) | 2,731 glosses, ~83K videos, 52 signers |
+| **WLASL** | Supplementary training | 2,000 glosses, ~21K videos |
+| **MS-ASL** | Supplementary training | 1,000 glosses, ~25K videos |
 
 ## Project Structure
 
 ```
 .
-├── a1/                     # A1: Project proposal
-│   └── a1.pdf
+├── backend/                  # FastAPI inference API
+│   ├── app/
+│   │   ├── main.py           # App entrypoint, lifespan loads I3D model
+│   │   ├── config.py         # S3 bucket, model path, label map path
+│   │   ├── routers/          # health.py, predict.py
+│   │   ├── schemas/          # Pydantic models
+│   │   └── services/         # model_service (I3D), preprocessing, firebase
+│   ├── tests/                # 82 tests, 100% coverage
+│   └── requirements.txt
 │
-├── a2/                     # A2: Eye Hear U full project
-│   ├── backend/            # FastAPI API
-│   ├── mobile/             # React Native app
-│   ├── ml/                 # Video classifier
-│   ├── data/               # Data pipeline scripts
-│   ├── infrastructure/     # Terraform IaC
-│   ├── docs/               # A2 documentation
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   └── Project Doc.pdf
+├── mobile/                   # React Native (Expo) mobile app
+│   ├── app/                  # _layout, index, camera, history
+│   ├── __tests__/            # 66 tests, 100% line coverage (enforced in package.json)
+│   ├── services/api.ts       # API client for /predict endpoint
+│   └── package.json
 │
-├── a3/                     # A3: LLM ablations
-│   └── nanochat-modal/     # Modal + SwiGLU + RMSNorm
-│       ├── nanochat_modal.py
-│       ├── ablation_swiglu/
-│       └── ablation_rmsnorm/
+├── ml/                       # Machine learning code
+│   ├── i3d_msft/             # Inception I3D — the deployed model
+│   │   ├── pytorch_i3d.py    # InceptionI3d architecture (from Microsoft)
+│   │   ├── videotransforms.py
+│   │   ├── export_label_map.py
+│   │   ├── train.py          # I3D training with S3 data + Modal GPU
+│   │   ├── evaluate.py       # I3D evaluation (top-k, MRR, DCG, confusion)
+│   │   ├── dataset.py        # ASLCitizenI3DDataset (64-frame, [-1,1] norm)
+│   │   ├── s3_data.py        # S3 sync helpers (splits, clips)
+│   │   └── build_label_map_artifacts.py  # Rebuild label map from training
+│   ├── i3d_label_map_mvp-sft-full-v1.json  # 856-class label map (v4)
+│   ├── modal_train_i3d.py    # Modal GPU wrapper for cloud training
+│   ├── profiling/            # cProfile analysis of 5 key functions
+│   ├── tests/                # 190+ unit tests, 100% coverage
+│   └── requirements.txt
 │
+├── data/                     # Data pipeline
+│   ├── Dockerfile            # Pipeline container image
+│   ├── scripts/
+│   │   ├── pipeline_config.py          # Shared config (local + S3)
+│   │   ├── ingest_asl_citizen.py
+│   │   ├── ingest_wlasl.py
+│   │   ├── ingest_msasl.py
+│   │   ├── preprocess_clips.py
+│   │   ├── build_unified_dataset.py
+│   │   ├── validate.py
+│   │   ├── plan_i3d_splits.py          # Versioned S3 split plans
+│   │   ├── prepare_i3d_from_s3.py      # Download & prepare I3D data
+│   │   └── requirements.txt
+│   ├── raw/                  # Raw video files (gitignored)
+│   └── processed/            # Processed clips + metadata (gitignored)
+│
+├── infrastructure/           # Infrastructure as Code
+│   ├── main.tf               # Root module, provider config
+│   ├── variables.tf
+│   ├── outputs.tf
+│   ├── environments/
+│   │   ├── dev.tfvars
+│   │   ├── staging.tfvars
+│   │   └── prod.tfvars
+│   ├── modules/              # Terraform modules
+│   │   ├── s3/               # Data lake bucket
+│   │   ├── ecr/              # Container registries
+│   │   ├── batch/            # Pipeline job compute
+│   │   ├── ecs/              # API cluster + ALB
+│   │   ├── iam/              # Roles and policies
+│   │   ├── networking/       # VPC, subnets, NAT
+│   │   └── monitoring/       # CloudWatch, SNS alerts
+│   └── k8s/                  # Kubernetes manifests
+│       ├── namespace.yaml
+│       ├── deployment.yaml   # API Deployment (2 replicas)
+│       ├── service.yaml      # ClusterIP Service
+│       ├── ingress.yaml      # ALB Ingress
+│       ├── configmap.yaml    # Environment configuration
+│       └── hpa.yaml          # Horizontal Pod Autoscaler
+│
+├── docs/
+│   ├── USER_GUIDE.md         # End-user guide
+│   ├── DEVELOPER_GUIDE.md    # Setup and day-to-day development
+│   ├── TESTING.md            # Tests, coverage, CI
+│   ├── PRODUCTION.md         # Production deployment
+│   ├── PREPROCESSING.md      # I3D inference preprocessing
+│   ├── EVALUATION.md         # How to generate evaluation metrics
+│   ├── BENCHMARKING.md       # Evaluation metrics and reproduction
+│   ├── PROFILING.md          # cProfile analysis of 5 key functions
+│   ├── i3d_s3_repro_guide.md # I3D training reproduction with S3
+│   └── ops_migration_modal_sft_tutorial.md  # AWS/Modal migration
+│
+├── .github/workflows/ci.yml  # GitHub Actions CI (backend, ML, mobile)
+├── Dockerfile
+├── docker-compose.yml
 └── .gitignore
 ```
 
----
-
 ## Quick Start
 
-### A2 — Eye Hear U (Infrastructure)
+### Backend (Inference API)
+
+The backend serves the I3D model. On first startup it downloads the checkpoint from S3 automatically.
 
 ```bash
-cd a2/infrastructure
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env if needed (MODEL_DEVICE, LABEL_MAP_PATH, etc.)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Test the API:
+
+```bash
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/api/v1/predict -F "file=@sample.mp4"
+```
+
+### Mobile App
+
+```bash
+cd mobile
+npm install --legacy-peer-deps
+npx expo start
+```
+
+Set `EXPO_PUBLIC_API_URL` in `mobile/.env` to point to the backend (e.g., `http://192.168.x.x:8000`). See [Developer guide](docs/DEVELOPER_GUIDE.md) for LAN / tunnel setup.
+
+### Data Pipeline
+
+```bash
+cd data/scripts
+pip install -r requirements.txt
+
+export PIPELINE_ENV=local
+python ingest_asl_citizen.py
+python ingest_wlasl.py
+python ingest_msasl.py
+python preprocess_clips.py
+python build_unified_dataset.py
+python validate.py
+```
+
+### I3D Training (Modal GPU)
+
+```bash
+pip install modal
+modal setup  # one-time auth
+# Smoke test (1 epoch, 200 clips)
+modal run ml/modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 1 --clip-limit 200
+# Full training
+modal run ml/modal_train_i3d.py --bucket eye-hear-u-public-data-ca1 --epochs 20
+```
+
+See [I3D S3 Repro Guide](docs/i3d_s3_repro_guide.md) and [Ops Migration Tutorial](docs/ops_migration_modal_sft_tutorial.md) for details.
+
+### Infrastructure (Terraform)
+
+```bash
+cd infrastructure
 terraform init
 terraform apply -var-file=environments/dev.tfvars
 ```
 
-### A2 — Data Pipeline
+### Kubernetes Deployment (alternative to ECS)
 
 ```bash
-cd a2/data/scripts
-pip install -r requirements.txt
-export PIPELINE_ENV=local
-python ingest_asl_citizen.py
-python preprocess_clips.py
-python build_unified_dataset.py
+kubectl apply -k infrastructure/k8s/
 ```
 
-### A2 — Backend & Mobile
+### Docker
 
 ```bash
-cd a2/backend && pip install -r requirements.txt && cp .env.example .env && uvicorn app.main:app --reload
-cd a2/mobile && npm install && npx expo start
+docker compose up --build
 ```
 
-### A3 — Nanochat on Modal
+## Testing
+
+CI runs three parallel jobs on every push/PR to `main`:
+
+| Job | Tests | Coverage | Enforced |
+|-----|-------|----------|----------|
+| Backend | 82 pytest | 100% line + branch | `--cov-fail-under=100` |
+| ML | 190+ pytest | 100% line | `--cov-fail-under=100` |
+| Mobile | 66 Jest | 100% line + function | Jest `coverageThreshold` in `package.json` |
+
+Run locally:
 
 ```bash
-cd a3/nanochat-modal
-git clone https://github.com/karpathy/nanochat.git
-uv sync && modal setup
-uv run modal run nanochat_modal.py::stage_data
-uv run modal run nanochat_modal.py::stage_pretrain
+# Backend
+cd backend && pytest tests/ -v --cov=app --cov-fail-under=100
+
+# ML
+cd ml && python -m pytest tests/ -v --cov --cov-fail-under=100
+
+# Mobile
+cd mobile && npx jest --coverage
 ```
 
----
-
-## Datasets (A2)
-
-| Dataset     | Role                    | Size                          |
-|-------------|-------------------------|-------------------------------|
-| **ASL Citizen** | Primary (train/val/test) | 2,731 glosses, ~83K videos    |
-| **WLASL**   | Supplementary            | 2,000 glosses, ~21K videos    |
-| **MS-ASL**  | Supplementary            | 1,000 glosses, ~25K videos    |
-
----
-
-For detailed documentation, see `a2/docs/architecture.md`, `a2/docs/data_schema.md`, `a2/docs/data_pipeline.md`, and `a2/docs/terraform_guide.md`.
+See [Testing](docs/TESTING.md) for full details and [Evaluation](docs/EVALUATION.md) for generating metrics for reports.

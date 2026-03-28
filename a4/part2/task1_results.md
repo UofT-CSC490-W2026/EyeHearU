@@ -2,90 +2,88 @@
 
 ## Overview
 
-We ran the nanochat **SFT** (Supervised Fine-Tuning) script on our pretrained `d12_swiglu` model
-(from a3, step 2205) using the **original nanochat configuration** — no hyperparameter changes,
+We ran the nanochat **SFT** (Supervised Fine-Tuning) script on our pretrained **baseline `d12`** model
+(step 2205) using the **original nanochat configuration** — no hyperparameter changes,
 default data mixture and training schedule. The run was logged to Weights & Biases, and benchmark
 evaluations (ChatCORE: ARC, MMLU, GSM8K, HumanEval, SpellingBee) ran automatically after training.
 
-## W&B Run
+## Note on Midtraining
 
-| W&B Project | Run Name | Link |
-|-------------|----------|------|
-| `nanochat-sft` | `a4_task1_sft` | https://wandb.ai/ysj15265673506-university-of-toronto/nanochat-sft/runs/pb7f6eur |
+Karpathy removed the separate `mid_train.py` script from nanochat on January 31, 2025 (commit
+`1ddaad1`), but the midtraining data (MMLU, GSM8K, SpellingBee, SimpleSpelling) was folded into
+`chat_sft.py` as a unified mixture. We use this current version, so our single SFT stage is
+functionally equivalent to running both midtraining and SFT.
+
+## Model Choice Justification
+
+We chose the **baseline GPT d12** architecture over the SwiGLU variant from A3 for the following reasons:
+
+1. **Direct comparability to Karpathy's reference run.** The assignment asks us to "replicate the run
+   in github where Karpathy trains the model on GSM8k." Karpathy's original nanochat uses the standard
+   GPT architecture, so using the same architecture ensures our results are directly comparable without
+   confounding variables from architectural differences.
+
+2. **No monkey-patching complexity.** The SwiGLU variant requires custom wrapper scripts
+   (`chat_sft_swiglu.py`, `chat_rl_swiglu.py`, etc.) that monkey-patch the model class at import time.
+   Using the baseline architecture lets us use the upstream nanochat scripts directly, reducing the risk
+   of subtle bugs.
+
+3. **Similar pretraining quality.** Both d12 variants achieved comparable pretraining quality
+   (Val BPB 0.8899 baseline vs. 0.9064 SwiGLU, CORE 0.1186 vs. 0.1334), so this choice does not
+   sacrifice meaningful model capability.
+
+The professor confirmed that any variant or baseline is acceptable as long as the choice is justified.
 
 ## Data Sources
 
 | Data point | Source |
 |------------|--------|
-| SFT training metrics (loss, BPB, ChatCORE, steps) | W&B run `a4_task1_sft` + Modal terminal logs from `stage_sft_task1` |
-| SFT benchmark accuracy (ARC, MMLU, GSM8K, etc.) | `chat_eval_swiglu -i sft` output at end of `stage_sft_task1` |
-| Pretrained Val BPB (0.9064) and CORE (0.1334) | a3 pretrain run, recorded in `a4/part4/compair_results.md` table row "picochat (SwiGLU)" |
-| Pretrained params and tokens | a3 pretrain training header |
-| Pretrained benchmark baselines (~25%, ~0%) | Theoretical random-guess values (pretrained model has no chat format knowledge) |
+| SFT training metrics (loss, BPB, steps) | Modal `stage_sft` terminal logs + W&B |
+| SFT benchmark accuracy (ARC, MMLU, GSM8K, etc.) | `chat_eval -i sft --model-tag=d12` output |
+| Pretrained Val BPB (0.8899) and CORE (0.1186) | A3 pretrain run |
+| Pretrained params and tokens | A3 pretrain training header |
+| Pretrained benchmark baselines (~25%, ~0%) | Theoretical random-guess values |
 
 ## Training Summary
 
 | Metric | Value |
 |--------|-------|
-| Model | d12_swiglu (SwiGLU, 12 layers, n_embd=768) |
+| Model | d12 (GPT baseline, 12 layers, n_embd=768) |
 | Pretrain checkpoint | step 2205 |
 | Total SFT steps | 969 |
-| Training time | 4.25 min |
-| GPU | 4x H100 80GB |
-| Peak memory | 16,559.95 MiB |
-| Final val BPB | 0.3683 |
-| Final ChatCORE | 0.2380 |
-
-### Val BPB over training
-
-| Step | Val BPB |
-|------|---------|
-| 0    | 0.6424  |
-| 200  | 0.4432  |
-| 400  | 0.4244  |
-| 600  | 0.4031  |
-| 800  | 0.3798  |
-| 969  | 0.3683  |
-
-### ChatCORE over training
-
-| Step | ChatCORE | ChatCORE_cat |
-|------|----------|--------------|
-| 200  | 0.1834   | 0.0751       |
-| 400  | 0.2034   | 0.0734       |
-| 600  | 0.2125   | 0.0777       |
-| 800  | 0.2234   | 0.0856       |
-| 969  | 0.2380   | 0.1009       |
+| GPU | 4× H100 80GB |
+| Final val BPB | 0.3688 |
+| Final ChatCORE | 0.2375 |
 
 ## Results Comparison: Pretrained vs After SFT
 
 ### Benchmark Accuracy
 
-| Task | Pretrained (d12_swiglu) | After SFT | Change |
-|------|------------------------|-----------|--------|
-| ARC-Easy (↑) | ~25% (random) | 36.15% | +11.15% |
-| ARC-Challenge (↑) | ~25% (random) | 30.12% | +5.12% |
-| MMLU (↑) | ~25% (random) | 31.39% | +6.39% |
-| GSM8K (↑) | ~0% | 3.11% | +3.11% |
-| HumanEval (↑) | ~0% | 8.54% | +8.54% |
-| SpellingBee (↑) | ~0% | 98.44% | +98.44% |
-| **ChatCORE** (↑) | N/A | **0.2380** | — |
+| Task | Pretrained (d12) | After SFT | Change |
+|------|------------------|-----------|--------|
+| ARC-Easy (↑) | ~25% (random) | 36.20% | +11.20% |
+| ARC-Challenge (↑) | ~25% (random) | 32.85% | +7.85% |
+| MMLU (↑) | ~25% (random) | 30.71% | +5.71% |
+| GSM8K (↑) | ~0% | 3.56% | +3.56% |
+| HumanEval (↑) | ~0% | 6.71% | +6.71% |
+| SpellingBee (↑) | ~0% | 99.22% | +99.22% |
+| **ChatCORE** (↑) | N/A | **0.2375** | — |
 
 ### Loss
 
 | Metric | Pretrained | After SFT | Change |
 |--------|-----------|-----------|--------|
-| Val BPB (↓) | 0.9064 | 0.3683 | -59.4% |
-| CORE | 0.1334 | N/A (ChatCORE = 0.2380) | — |
+| Val BPB (↓) | 0.8899 | 0.3688 | −58.6% |
+| CORE | 0.1186 | N/A (ChatCORE = 0.2375) | — |
 
-### Pretrained Baseline (from a3)
+### Pretrained Baseline (from A3)
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Val BPB | 0.9064 | a3 pretrain training header, also in `a4/part4/compair_results.md` |
-| CORE | 0.1334 | a3 `stage_post_pretrain_eval` output, also in `a4/part4/compair_results.md` |
-| Total Params | 286,262,424 | a3 pretrain training header |
-| Train Tokens | 1,156,055,040 | a3 pretrain training header |
+| Val BPB | 0.8899 | A3 pretrain training report |
+| CORE | 0.1186 | A3 `stage_post_pretrain_eval` output |
+| Total Params | 286,262,424 | A3 pretrain training header |
+| Train Tokens | 1,156,055,040 | A3 pretrain training header |
 
 Categorical benchmark baselines (ARC ~25%, MMLU ~25%) are theoretical random-guess
 values for 1-of-4 multiple choice. Generative baselines (GSM8K ~0%, HumanEval ~0%,
@@ -96,29 +94,26 @@ tool-use tokens, so it cannot produce valid answers for these tasks.
 
 ### Impact of SFT
 
-- **Val BPB dropped dramatically** (0.9064 → 0.3683, -59.4%), showing the model learned
+- **Val BPB dropped dramatically** (0.8899 → 0.3688, −58.6%), showing the model learned
   conversational and task-specific patterns much better than raw pretraining.
 
-- **Categorical benchmarks improved beyond random baseline**: ARC-Easy rose from ~25% to 36.15%,
-  ARC-Challenge from ~25% to 30.12%, and MMLU from ~25% to 31.39%. SFT teaches the model the
+- **Categorical benchmarks improved beyond random baseline**: ARC-Easy rose from ~25% to 36.20%,
+  ARC-Challenge from ~25% to 32.85%, and MMLU from ~25% to 30.71%. SFT teaches the model the
   multiple-choice answer format, which is why these tasks see clear gains.
 
-- **SpellingBee reached near-perfect accuracy** (98.44%), since the SFT data mixture explicitly
+- **SpellingBee reached near-perfect accuracy** (99.22%), since the SFT data mixture explicitly
   includes 200K SimpleSpelling and 80K SpellingBee examples.
 
-- **GSM8K improved modestly** (0% → 3.11%). The SFT mixture includes GSM8K examples with
+- **GSM8K improved modestly** (0% → 3.56%). The SFT mixture includes GSM8K examples with
   calculator tool use, but without RL-based optimization, the model struggles with multi-step
   math reasoning.
 
-- **HumanEval showed early signs of coding ability** (0% → 8.54%), enabled by exposure to
+- **HumanEval showed early signs of coding ability** (0% → 6.71%), enabled by exposure to
   structured code generation during SFT.
-
-- **ChatCORE steadily improved** throughout training (0.1834 at step 200 → 0.2380 at step 969),
-  indicating broad capability gains across all evaluated tasks.
 
 ### Key Takeaways
 
 SFT is essential for converting a raw pretrained model into a useful chat model. The largest
 gains come from format learning (multiple choice, tool use, spelling) rather than deep reasoning.
 Tasks requiring multi-step reasoning like GSM8K show only modest improvement from SFT alone —
-further gains would require RL-based training (Part 3).
+further gains require RL-based training (Part 3).
