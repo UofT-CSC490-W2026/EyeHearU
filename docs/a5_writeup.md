@@ -7,8 +7,6 @@
 | Siyi Zhu    | 1008793076     |
 | Chloe Yang  | 1009261433     |
 
-**Course submission PDF (handout):** repository path **`a5/a5.pdf`** (the `a5/` directory should contain only that PDF; see `a5/.gitignore`). 
-
 ---
 
 ## Part One: Profiling Execution Time
@@ -212,11 +210,11 @@ The CI workflow ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) runs
 | Backend | `pytest --cov=app --cov-report=xml --cov-fail-under=100`     | 100% line and branch on `app/`                             | Job log + **Summary** (`coverage report`)                          |
 | ML      | `pytest --cov --cov-report=xml --cov-fail-under=100`         | 100% line                                                    | Job log + **Summary** (`coverage report`)                          |
 | Mobile  | `npx jest --coverage --ci` + `json-summary` / `lcov` / `text` reporters | 100% line + function (`coverageThreshold` in `package.json`) | Job log + **Summary**; `coverage-summary.json` consumed by publish job |
-| **Coverage (README + PR)** | *(after artifacts from the three jobs above)*  | *(no separate tests)*  | See below                                                          |
+| **Coverage** | *(after artifacts from the three jobs above)*  | *(no separate tests)*  | See below                                                          |
 
 **Publishing coverage:** the **`coverage-publish`** job downloads artifacts (pytest text summaries and Jest `coverage-summary.json`), runs [`.github/scripts/build_coverage_report.py`](../.github/scripts/build_coverage_report.py), then:
 
-- **Push to `main` or `master`:** rewrites the root [README](../README.md) between `<!-- COVERAGE_REPORT_START -->` and `<!-- COVERAGE_REPORT_END -->` with the latest percentages and a link to that workflow run, and pushes commit **`chore(ci): update coverage in README`** as `github-actions[bot]`. Commits with that message **skip** the three test jobs so the bot does not loop CI forever.
+- **Push to `main`:** rewrites the root [README](../README.md) between `<!-- COVERAGE_REPORT_START -->` and `<!-- COVERAGE_REPORT_END -->` with the latest percentages and a link to that workflow run, and pushes commit **`chore(ci): update coverage in README`** as `github-actions[bot]`. Commits with that message **skip** the three test jobs so the bot does not loop CI forever.
 - **Pull requests (branch on the same repo):** posts or updates one **sticky** comment ( [`marocchino/sticky-pull-request-comment`](https://github.com/marocchino/sticky-pull-request-comment) ) with a markdown coverage table. PRs from **forks** still run tests; the comment step is skipped because the default token cannot write to fork PRs.
 
 The README CI badge links to GitHub Actions. Reviewers can also use each test job’s log and **Summary** tab.
