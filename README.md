@@ -7,7 +7,7 @@
 
 This repository hosts **CSC490 milestones** in `a1/` … `a4/` and the **main Eye Hear U application at the repository root** (`backend/`, `ml/`, `mobile/`, `data/`, `infrastructure/`, `docs/`). CI runs from [`.github/workflows/ci.yml`](.github/workflows/ci.yml); coverage uploads use [`codecov.yml`](codecov.yml) (see **Codecov setup** below).
 
-**A5 (CSC490) submission:** the handout requires a folder named **`a5/`** containing only **`a5.pdf`** → [`a5/a5.pdf`](a5/a5.pdf) (team names and student IDs on the first page; Part Five video links in the PDF and in [`docs/a5_writeup.md`](docs/a5_writeup.md)).
+**A5 (CSC490) submission:** the **`a5/`** folder contains **`a5.pdf`** → [`a5/a5.pdf`](a5/a5.pdf).
 
 ### Codecov setup (org repos, README badge, PR comments)
 
