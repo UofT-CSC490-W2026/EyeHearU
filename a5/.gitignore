@@ -1,0 +1,4 @@
+# CSC490 handout: the only tracked file in this directory should be a5.pdf.
+*
+!.gitignore
+!a5.pdf

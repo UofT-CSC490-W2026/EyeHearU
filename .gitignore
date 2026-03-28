@@ -64,7 +64,7 @@ mobile/coverage/
 # Local inference weights (download from S3 or use cache)
 backend/model_cache/*.pt
 
-# Duplicate / draft PDFs under docs (canonical submission is ./a5.pdf)
+# Duplicate / draft PDFs under docs (canonical A5 submission is a5/a5.pdf only)
 docs/*.pdf
 
 #a3 / a4 — each nanochat-modal/.gitignore handles its own nanochat/ exclusion

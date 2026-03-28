@@ -7,6 +7,8 @@
 | Siyi Zhu    | 1008793076     |
 | Chloe Yang  | 1009261433     |
 
+**Course submission PDF (handout):** repository path **`a5/a5.pdf`** (the `a5/` directory should contain only that PDF; see `a5/.gitignore`).
+
 ---
 
 ## Part One: Profiling Execution Time

@@ -5,9 +5,16 @@
 
 **Real-time ASL-to-English translation on iOS** — one sign at a time.
 
-This repository hosts **CSC490 milestones** in `a1/` … `a4/` and the **main Eye Hear U application at the repository root** (`backend/`, `ml/`, `mobile/`, `data/`, `infrastructure/`, `docs/`). CI and Codecov use [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and [`codecov.yml`](codecov.yml) after you add the `CODECOV_TOKEN` repository secret.
+This repository hosts **CSC490 milestones** in `a1/` … `a4/` and the **main Eye Hear U application at the repository root** (`backend/`, `ml/`, `mobile/`, `data/`, `infrastructure/`, `docs/`). CI runs from [`.github/workflows/ci.yml`](.github/workflows/ci.yml); coverage uploads use [`codecov.yml`](codecov.yml) (see **Codecov setup** below).
 
-**A5 (CSC490) submission:** [`a5.pdf`](a5.pdf) — team names and student IDs on the first page; Part Five video links inside the PDF and in [`docs/a5_writeup.md`](docs/a5_writeup.md).
+**A5 (CSC490) submission:** the handout requires a folder named **`a5/`** containing only **`a5.pdf`** → [`a5/a5.pdf`](a5/a5.pdf) (team names and student IDs on the first page; Part Five video links in the PDF and in [`docs/a5_writeup.md`](docs/a5_writeup.md)).
+
+### Codecov setup (org repos, README badge, PR comments)
+
+- **Why you might not see `UofT-CSC490-W2026/EyeHearU` in Codecov:** the project only appears after Codecov can access the repo. For **GitHub organizations**, a user with **admin** on the org or repo must (1) sign in at [codecov.io](https://codecov.io) with GitHub, (2) **approve the Codecov GitHub App** for the **UofT-CSC490-W2026** organization (GitHub → Organization settings → Third-party access / GitHub Apps), and (3) enable the **EyeHearU** repository in Codecov. You do **not** need to be the repo creator; you need someone who can install apps or add **repository secrets**.
+- **Repository secret:** In **GitHub → the repo → Settings → Secrets and variables → Actions**, add **`CODECOV_TOKEN`** from Codecov (repo → Settings → General → Repository upload token). Alternatively, an org owner can add the same secret at **organization** level so all course repos can use it.
+- **README badge:** The badge URL points at `codecov.io/gh/UofT-CSC490-W2026/EyeHearU/...`. It stays “unknown” until at least one successful upload from **`main`** (after merge). Forks and PRs from forks have extra limitations unless Codecov is configured for them.
+- **PR comments:** Codecov posts on PRs only after the app is installed, the token is set (or OIDC is configured), and uploads succeed. Until then, coverage is still generated in **GitHub Actions**: open the PR → **Checks** tab → **CI** workflow → each job (**backend** / **ml** / **mobile**) → expand **Run tests with coverage** and the job **Summary** (backend/ml include a `coverage report` table).
 
 Eye Hear U translates isolated American Sign Language (ASL) signs into English text and speech using a mobile app, a backend inference API, and a video classifier trained on public ASL datasets. Infrastructure is provisioned on AWS via Terraform.
 
@@ -26,7 +33,7 @@ Eye Hear U translates isolated American Sign Language (ASL) signs into English t
 | Modal / AWS migration | [Ops Migration Tutorial](docs/ops_migration_modal_sft_tutorial.md) |
 | Profiling analysis | [Profiling](docs/PROFILING.md) |
 
-**Codecov:** Register the repository at [codecov.io](https://about.codecov.io/) and add the `CODECOV_TOKEN` secret under GitHub → Settings → Secrets → Actions so PR comments and the badge update automatically. CI uploads **three** reports (`backend`, `ml`, `mobile` flags) so the dashboard shows backend, ML, and frontend together; path fixes in `codecov.yml` map Jest’s `app/` and `services/` paths under `mobile/`. CI still enforces **100%** backend and ML coverage and **100%** mobile line and function coverage in Jest, independently of Codecov.
+CI uploads **three** reports (`backend`, `ml`, `mobile`) when Codecov is configured (see **Codecov setup** above). Path fixes in `codecov.yml` map Jest’s paths under `mobile/`. Coverage gates (**100%** backend/ML pytest, **100%** mobile Jest thresholds) are enforced in CI regardless of Codecov.
 
 ---
 
