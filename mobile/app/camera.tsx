@@ -408,7 +408,7 @@ export default function CameraScreen() {
         ) : sentenceResult ? (
           <>
             <Text style={styles.predictionLabel}>Sentence</Text>
-            <Text style={styles.predictionText}>{sentenceResult.english}</Text>
+            <Text style={styles.sentenceText}>{sentenceResult.english}</Text>
             <Text style={styles.confidenceText}>
               {sentenceResult.best_glosses.join(" · ")}
             </Text>
@@ -697,6 +697,12 @@ const styles = StyleSheet.create({
     color: BRAND.teal,
     marginBottom: 6,
     textTransform: "capitalize",
+  },
+  sentenceText: {
+    fontSize: 38,
+    fontWeight: "800",
+    color: BRAND.teal,
+    marginBottom: 6,
   },
   confidenceBar: {
     width: "60%",

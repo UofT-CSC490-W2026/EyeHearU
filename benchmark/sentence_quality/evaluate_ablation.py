@@ -61,7 +61,18 @@ def _beam_glosses(candidates_per_clip: list[list[dict]], lm, *, beam_size: int, 
     return list(beams[0].glosses)
 
 
-def generate_predictions(input_json: Path, output_json: Path, *, beam_size: int, lm_weight: float) -> None:
+def _default_lm_path() -> Path:
+    return Path(__file__).resolve().parent / "gloss_lm_ablation.json"
+
+
+def generate_predictions(
+    input_json: Path,
+    output_json: Path,
+    *,
+    beam_size: int,
+    lm_weight: float,
+    lm_json: Path | None,
+) -> None:
     from app.config import get_settings
     from app.services.gloss_lm import load_gloss_lm
     from app.services.gloss_to_english import gloss_sequence_to_english as rule_fn
@@ -83,8 +94,10 @@ def generate_predictions(input_json: Path, output_json: Path, *, beam_size: int,
         vocab = {c["sign"] for clip in candidates for c in clip}
         fake_idx = {i: g for i, g in enumerate(sorted(vocab))}
 
-        from pathlib import Path as _Path
-        lm_path = _Path(__file__).resolve().parents[2] / "backend" / settings.gloss_lm_path
+        repo_backend = Path(__file__).resolve().parents[2] / "backend"
+        lm_path = lm_json if lm_json is not None else _default_lm_path()
+        if not lm_path.is_file():
+            lm_path = repo_backend / settings.gloss_lm_path
         lm = load_gloss_lm(lm_path if lm_path.is_file() else None, fake_idx)
 
         greedy_glosses = _greedy_glosses(candidates)
@@ -194,7 +207,13 @@ def main() -> None:
     g.add_argument("--input", required=True, type=Path, help="JSON list with case_id,candidates,reference")
     g.add_argument("--output", required=True, type=Path, help="Output JSON predictions")
     g.add_argument("--beam-size", type=int, default=8)
-    g.add_argument("--lm-weight", type=float, default=1.0)
+    g.add_argument("--lm-weight", type=float, default=2.0)
+    g.add_argument(
+        "--lm-json",
+        type=Path,
+        default=None,
+        help="Peaked gloss LM JSON for ablation (default: benchmark/sentence_quality/gloss_lm_ablation.json)",
+    )
 
     s = sub.add_parser("score", help="Score ablation predictions")
     s.add_argument("--predictions", required=True, type=Path, help="Prediction JSON path")
@@ -202,7 +221,13 @@ def main() -> None:
 
     args = p.parse_args()
     if args.cmd == "generate":
-        generate_predictions(args.input, args.output, beam_size=args.beam_size, lm_weight=args.lm_weight)
+        generate_predictions(
+            args.input,
+            args.output,
+            beam_size=args.beam_size,
+            lm_weight=args.lm_weight,
+            lm_json=args.lm_json,
+        )
     else:
         score_predictions(args.predictions, args.out)
 

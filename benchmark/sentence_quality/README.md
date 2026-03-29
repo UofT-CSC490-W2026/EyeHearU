@@ -1,4 +1,4 @@
-# Sentence Quality Benchmark (`rule` vs `t5` vs `bedrock`)
+# Sentence Quality Benchmark (`rule` vs `t5` vs `bedrock`) with ablation study Beam Search 
 
 This benchmark evaluates how well each gloss-to-English mode converts the **same gloss sequence** into natural English.
 
@@ -78,12 +78,18 @@ Use JSON like `data_ablation_template.json`:
 - `case_id`
 - `reference`
 - `candidates`: list of clips; each clip is list of top-k candidates with
-  `{"sign": "...", "confidence": ...}`.
+`{"sign": "...", "confidence": ...}`.
 
 This directly matches your matrix intuition:
 
 - rows = clip positions
 - columns = top-k candidates for that clip
+
+### Why greedy equalled beam before
+
+The repo’s `backend/data/gloss_lm.json` is mostly `<s> → gloss` mass; **after the first gloss**, bigrams are nearly Laplace-uniform. Then total score ≈ sum of per-clip log-confidence, and **beam ≈ greedy**.
+
+To *demonstrate* beam changing the path, this folder includes `**gloss_lm_ablation.json`** — a tiny LM with **strong bigrams** — and **near-tied** fake confidences in `data_ablation_template.json`. The script uses that LM by default (`--lm-json` optional).
 
 ### Generate ablation predictions
 
@@ -93,8 +99,10 @@ PYTHONPATH=. python ../benchmark/sentence_quality/evaluate_ablation.py generate 
   --input ../benchmark/sentence_quality/data_ablation_template.json \
   --output ../benchmark/sentence_quality/results/ablation_predictions.json \
   --beam-size 8 \
-  --lm-weight 1.0
+  --lm-weight 2.0
 ```
+
+Use `--lm-json path/to/gloss_lm.json` to score against the **production** LM instead (expect little or no greedy/beam gap).
 
 ### Score ablation
 
@@ -115,8 +123,6 @@ So you can isolate:
 1. **decoding effect**: greedy vs beam (same rewriter)
 2. **rewriter effect**: rule vs t5 vs bedrock (same decoding)
 
-
-
 Our result: (gloss to natural sentence)- across different last model
 
 rule     F1=0.819 BLEU=0.060 ROUGE-L=0.683 Cap=1.000 Punct=1.000
@@ -125,5 +131,18 @@ t5       F1=0.732 BLEU=0.093 ROUGE-L=0.696 Cap=1.000 Punct=1.000
 
 bedrock  F1=0.839 BLEU=0.248 ROUGE-L=0.786 Cap=1.000 Punct=1.000
 
+Ablation on Beam Search
 
+=== Ablation aggregate (higher is better) === 
 
+greedy_rule    F1=0.317 BLEU=0.000 ROUGE-L=0.307
+
+greedy_t5      F1=0.277 BLEU=0.000 ROUGE-L=0.307
+
+greedy_bedrock F1=0.284 BLEU=0.000 ROUGE-L=0.333
+
+beam_rule      F1=0.643 BLEU=0.000 ROUGE-L=0.553
+
+beam_t5        F1=0.552 BLEU=0.000 ROUGE-L=0.553
+
+beam_bedrock   F1=0.728 BLEU=0.156 ROUGE-L=0.660
