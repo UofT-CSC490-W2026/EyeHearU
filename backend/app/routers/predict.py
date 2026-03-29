@@ -127,7 +127,6 @@ async def predict_sentence(
 
     from app.config import get_settings
     from app.services.beam_search import beam_search
-    from app.services.gloss_to_english import gloss_sequence_to_english
     from app.services.model_service import predict_batch
     from app.services.preprocessing import preprocess_video
 
@@ -153,6 +152,63 @@ async def predict_sentence(
         lm_weight=lm_weight,
         top_sequences=5,
     )
+
+    mode = (settings.gloss_english_mode or "rule").strip().lower()
+    print(f"[english] mode={mode}")
+
+    if mode == "t5":
+        from app.services.gloss_to_english_t5 import gloss_sequence_to_english_t5 as _to_eng
+        beam_to_eng = _to_eng
+    elif mode == "openai":
+        from app.services.gloss_to_english import gloss_sequence_to_english as _rule_to_eng
+        from app.services.gloss_to_english_openai import gloss_sequence_to_english_openai as _openai_to_eng
+
+        def _to_eng(glosses: list[str]) -> str:
+            if not settings.openai_api_key.strip():
+                print("[english] openai missing key -> fallback=rule")
+                return _rule_to_eng(glosses)
+            try:
+                return _openai_to_eng(
+                    glosses,
+                    api_key=settings.openai_api_key,
+                    model=settings.openai_model,
+                    base_url=settings.openai_base_url,
+                    timeout_s=settings.openai_timeout_s,
+                )
+            except Exception as e:
+                # Never fail inference because rewrite API fails.
+                print(f"[english] openai failed -> fallback=rule: {e}")
+                return _rule_to_eng(glosses)
+
+        # Avoid multiple paid API calls per request for beam rows.
+        beam_to_eng = _rule_to_eng
+    elif mode == "bedrock":
+        from app.services.gloss_to_english import gloss_sequence_to_english as _rule_to_eng
+        from app.services.gloss_to_english_bedrock import (
+            gloss_sequence_to_english_bedrock as _bedrock_to_eng,
+        )
+
+        def _to_eng(glosses: list[str]) -> str:
+            try:
+                return _bedrock_to_eng(
+                    glosses,
+                    region=settings.bedrock_region,
+                    model_id=settings.bedrock_model_id,
+                    timeout_s=settings.bedrock_timeout_s,
+                )
+            except Exception as e:
+                # Never fail inference because rewrite API fails.
+                print(f"[english] bedrock failed -> fallback=rule: {e}")
+                return _rule_to_eng(glosses)
+
+        # Avoid multiple paid API calls per request for beam rows.
+        beam_to_eng = _rule_to_eng
+    else:
+        if mode != "rule":
+            print(f"[english] unknown mode='{mode}' -> fallback=rule")
+        from app.services.gloss_to_english import gloss_sequence_to_english as _to_eng
+        beam_to_eng = _to_eng
+
     clips_out = [
         SentenceClipResult(
             top_k=[TopKPrediction(sign=x["sign"], confidence=x["confidence"]) for x in h]
@@ -163,13 +219,13 @@ async def predict_sentence(
         SentenceBeamRow(
             glosses=list(b.glosses),
             score=round(b.score, 4),
-            english=gloss_sequence_to_english(list(b.glosses)),
+            english=beam_to_eng(list(b.glosses)),
         )
         for b in beams
     ]
     best = beams[0] if beams else None
     best_glosses = list(best.glosses) if best else []
-    english = gloss_sequence_to_english(best_glosses)
+    english = _to_eng(best_glosses)
 
     return SentencePredictionResponse(
         clips=clips_out,

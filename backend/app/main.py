@@ -38,6 +38,14 @@ async def lifespan(application: FastAPI):
         application.state.index_to_gloss = None
         application.state.gloss_lm = None
         print(f"[startup] Model load failed: {e}")
+
+    if settings.gloss_english_mode == "t5":
+        try:
+            from app.services.gloss_to_english_t5 import _load_t5
+            _load_t5()
+            print("[startup] T5-small loaded for gloss→English")
+        except Exception as e:
+            print(f"[startup] T5 load failed (falling back to rule): {e}")
     print(f"[startup] {settings.app_name} is ready.")
     yield
 

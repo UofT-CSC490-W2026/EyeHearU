@@ -1,0 +1,44 @@
+[
+  {
+    "case_id": "a1",
+    "reference": "They greeted each other.",
+    "greedy_glosses": [
+      "five",
+      "hello",
+      "hello"
+    ],
+    "beam_glosses": [
+      "five",
+      "hello",
+      "hello"
+    ],
+    "greedy_rule": "Five hello hello.",
+    "greedy_t5": "Glosses: five.",
+    "greedy_bedrock": "They greeted each other.",
+    "beam_rule": "Five hello hello.",
+    "beam_t5": "Glosses: five.",
+    "beam_bedrock": "They greeted each other."
+  },
+  {
+    "case_id": "a2",
+    "reference": "Please help me now.",
+    "greedy_glosses": [
+      "please",
+      "help",
+      "me",
+      "now"
+    ],
+    "beam_glosses": [
+      "please",
+      "help",
+      "me",
+      "now"
+    ],
+    "greedy_rule": "Please help me now.",
+    "greedy_t5": "Glosses: please help me now.",
+    "greedy_bedrock": "Please help me now.",
+    "beam_rule": "Please help me now.",
+    "beam_t5": "Glosses: please help me now.",
+    "beam_bedrock": "Please help me now."
+  }
+]

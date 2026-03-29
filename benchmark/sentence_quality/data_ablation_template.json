@@ -1,0 +1,42 @@
+[
+  {
+    "case_id": "a1",
+    "reference": "They greeted each other.",
+    "candidates": [
+      [
+        { "sign": "five", "confidence": 0.56 },
+        { "sign": "hello", "confidence": 0.39 }
+      ],
+      [
+        { "sign": "hello", "confidence": 0.74 },
+        { "sign": "help", "confidence": 0.18 }
+      ],
+      [
+        { "sign": "hello", "confidence": 0.71 },
+        { "sign": "yes", "confidence": 0.17 }
+      ]
+    ]
+  },
+  {
+    "case_id": "a2",
+    "reference": "Please help me now.",
+    "candidates": [
+      [
+        { "sign": "please", "confidence": 0.61 },
+        { "sign": "doctor", "confidence": 0.22 }
+      ],
+      [
+        { "sign": "help", "confidence": 0.69 },
+        { "sign": "table", "confidence": 0.15 }
+      ],
+      [
+        { "sign": "me", "confidence": 0.74 },
+        { "sign": "you", "confidence": 0.16 }
+      ],
+      [
+        { "sign": "now", "confidence": 0.63 },
+        { "sign": "tomorrow", "confidence": 0.21 }
+      ]
+    ]
+  }
+]

@@ -1,0 +1,293 @@
+{
+  "count": 2,
+  "summary": {
+    "greedy_rule": {
+      "exact_match": 0.5,
+      "token_precision": 0.5,
+      "token_recall": 0.5,
+      "token_f1": 0.5,
+      "bleu1_precision": 0.5,
+      "bleu4_precision": 0.5,
+      "sentence_bleu": 0.5,
+      "rougeL_recall": 0.5,
+      "capitalization_ok": 1.0,
+      "punctuation_ok": 1.0
+    },
+    "greedy_t5": {
+      "exact_match": 0.0,
+      "token_precision": 0.4,
+      "token_recall": 0.5,
+      "token_f1": 0.4444,
+      "bleu1_precision": 0.4,
+      "bleu4_precision": 0.25,
+      "sentence_bleu": 0.3344,
+      "rougeL_recall": 0.5,
+      "capitalization_ok": 1.0,
+      "punctuation_ok": 1.0
+    },
+    "greedy_bedrock": {
+      "exact_match": 1.0,
+      "token_precision": 1.0,
+      "token_recall": 1.0,
+      "token_f1": 1.0,
+      "bleu1_precision": 1.0,
+      "bleu4_precision": 1.0,
+      "sentence_bleu": 1.0,
+      "rougeL_recall": 1.0,
+      "capitalization_ok": 1.0,
+      "punctuation_ok": 1.0
+    },
+    "beam_rule": {
+      "exact_match": 0.5,
+      "token_precision": 0.5,
+      "token_recall": 0.5,
+      "token_f1": 0.5,
+      "bleu1_precision": 0.5,
+      "bleu4_precision": 0.5,
+      "sentence_bleu": 0.5,
+      "rougeL_recall": 0.5,
+      "capitalization_ok": 1.0,
+      "punctuation_ok": 1.0
+    },
+    "beam_t5": {
+      "exact_match": 0.0,
+      "token_precision": 0.4,
+      "token_recall": 0.5,
+      "token_f1": 0.4444,
+      "bleu1_precision": 0.4,
+      "bleu4_precision": 0.25,
+      "sentence_bleu": 0.3344,
+      "rougeL_recall": 0.5,
+      "capitalization_ok": 1.0,
+      "punctuation_ok": 1.0
+    },
+    "beam_bedrock": {
+      "exact_match": 1.0,
+      "token_precision": 1.0,
+      "token_recall": 1.0,
+      "token_f1": 1.0,
+      "bleu1_precision": 1.0,
+      "bleu4_precision": 1.0,
+      "sentence_bleu": 1.0,
+      "rougeL_recall": 1.0,
+      "capitalization_ok": 1.0,
+      "punctuation_ok": 1.0
+    }
+  },
+  "details": [
+    {
+      "case_id": "a1",
+      "reference": "They greeted each other.",
+      "greedy_glosses": [
+        "five",
+        "hello",
+        "hello"
+      ],
+      "beam_glosses": [
+        "five",
+        "hello",
+        "hello"
+      ],
+      "systems": {
+        "greedy_rule": {
+          "prediction": "Five hello hello.",
+          "metrics": {
+            "exact_match": 0.0,
+            "token_precision": 0.0,
+            "token_recall": 0.0,
+            "token_f1": 0.0,
+            "bleu1_precision": 0.0,
+            "bleu4_precision": 0.0,
+            "sentence_bleu": 0.0,
+            "rougeL_recall": 0.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "greedy_t5": {
+          "prediction": "Glosses: five.",
+          "metrics": {
+            "exact_match": 0.0,
+            "token_precision": 0.0,
+            "token_recall": 0.0,
+            "token_f1": 0.0,
+            "bleu1_precision": 0.0,
+            "bleu4_precision": 0.0,
+            "sentence_bleu": 0.0,
+            "rougeL_recall": 0.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "greedy_bedrock": {
+          "prediction": "They greeted each other.",
+          "metrics": {
+            "exact_match": 1.0,
+            "token_precision": 1.0,
+            "token_recall": 1.0,
+            "token_f1": 1.0,
+            "bleu1_precision": 1.0,
+            "bleu4_precision": 1.0,
+            "sentence_bleu": 1.0,
+            "rougeL_recall": 1.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "beam_rule": {
+          "prediction": "Five hello hello.",
+          "metrics": {
+            "exact_match": 0.0,
+            "token_precision": 0.0,
+            "token_recall": 0.0,
+            "token_f1": 0.0,
+            "bleu1_precision": 0.0,
+            "bleu4_precision": 0.0,
+            "sentence_bleu": 0.0,
+            "rougeL_recall": 0.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "beam_t5": {
+          "prediction": "Glosses: five.",
+          "metrics": {
+            "exact_match": 0.0,
+            "token_precision": 0.0,
+            "token_recall": 0.0,
+            "token_f1": 0.0,
+            "bleu1_precision": 0.0,
+            "bleu4_precision": 0.0,
+            "sentence_bleu": 0.0,
+            "rougeL_recall": 0.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "beam_bedrock": {
+          "prediction": "They greeted each other.",
+          "metrics": {
+            "exact_match": 1.0,
+            "token_precision": 1.0,
+            "token_recall": 1.0,
+            "token_f1": 1.0,
+            "bleu1_precision": 1.0,
+            "bleu4_precision": 1.0,
+            "sentence_bleu": 1.0,
+            "rougeL_recall": 1.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        }
+      }
+    },
+    {
+      "case_id": "a2",
+      "reference": "Please help me now.",
+      "greedy_glosses": [
+        "please",
+        "help",
+        "me",
+        "now"
+      ],
+      "beam_glosses": [
+        "please",
+        "help",
+        "me",
+        "now"
+      ],
+      "systems": {
+        "greedy_rule": {
+          "prediction": "Please help me now.",
+          "metrics": {
+            "exact_match": 1.0,
+            "token_precision": 1.0,
+            "token_recall": 1.0,
+            "token_f1": 1.0,
+            "bleu1_precision": 1.0,
+            "bleu4_precision": 1.0,
+            "sentence_bleu": 1.0,
+            "rougeL_recall": 1.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "greedy_t5": {
+          "prediction": "Glosses: please help me now.",
+          "metrics": {
+            "exact_match": 0.0,
+            "token_precision": 0.8,
+            "token_recall": 1.0,
+            "token_f1": 0.888888888888889,
+            "bleu1_precision": 0.8,
+            "bleu4_precision": 0.5,
+            "sentence_bleu": 0.668740304976422,
+            "rougeL_recall": 1.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "greedy_bedrock": {
+          "prediction": "Please help me now.",
+          "metrics": {
+            "exact_match": 1.0,
+            "token_precision": 1.0,
+            "token_recall": 1.0,
+            "token_f1": 1.0,
+            "bleu1_precision": 1.0,
+            "bleu4_precision": 1.0,
+            "sentence_bleu": 1.0,
+            "rougeL_recall": 1.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "beam_rule": {
+          "prediction": "Please help me now.",
+          "metrics": {
+            "exact_match": 1.0,
+            "token_precision": 1.0,
+            "token_recall": 1.0,
+            "token_f1": 1.0,
+            "bleu1_precision": 1.0,
+            "bleu4_precision": 1.0,
+            "sentence_bleu": 1.0,
+            "rougeL_recall": 1.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "beam_t5": {
+          "prediction": "Glosses: please help me now.",
+          "metrics": {
+            "exact_match": 0.0,
+            "token_precision": 0.8,
+            "token_recall": 1.0,
+            "token_f1": 0.888888888888889,
+            "bleu1_precision": 0.8,
+            "bleu4_precision": 0.5,
+            "sentence_bleu": 0.668740304976422,
+            "rougeL_recall": 1.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        },
+        "beam_bedrock": {
+          "prediction": "Please help me now.",
+          "metrics": {
+            "exact_match": 1.0,
+            "token_precision": 1.0,
+            "token_recall": 1.0,
+            "token_f1": 1.0,
+            "bleu1_precision": 1.0,
+            "bleu4_precision": 1.0,
+            "sentence_bleu": 1.0,
+            "rougeL_recall": 1.0,
+            "capitalization_ok": 1.0,
+            "punctuation_ok": 1.0
+          }
+        }
+      }
+    }
+  ]
+}
