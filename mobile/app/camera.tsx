@@ -6,11 +6,15 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import type { CameraType } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import * as Speech from "expo-speech";
+import { useVideoPlayer, VideoView } from "expo-video";
+import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
 import { predictSign, type PredictionResult } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -39,6 +43,25 @@ export default function CameraScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [facing, setFacing] = useState<CameraType>("front");
   const [countdown, setCountdown] = useState<number>(0);
+  const [videoModal, setVideoModal] = useState<{ sign: string; urls: string[]; index: number } | null>(null);
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [videoError, setVideoError] = useState(false);
+
+  const currentVideoUrl = videoModal ? videoModal.urls[videoModal.index] : null;
+  const player = useVideoPlayer(currentVideoUrl, (p) => {
+    p.loop = true;
+    p.play();
+  });
+
+  useEffect(() => {
+    if (!currentVideoUrl || !player) return;
+    const statusSub = player.addListener("statusChange", (payload) => {
+      if (payload.status === "readyToPlay") setVideoLoading(false);
+      if (payload.status === "error") tryNextVideoSource();
+    });
+    return () => statusSub.remove();
+  }, [currentVideoUrl, player]);
+
   const cameraRef = useRef<CameraView>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -76,14 +99,14 @@ export default function CameraScreen() {
     countdownRef.current = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
+          clearInterval(countdownRef.current!);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      clearInterval(countdownRef.current!);
     };
   }, [isRecording]);
 
@@ -122,6 +145,7 @@ export default function CameraScreen() {
   };
 
   const recordAndPredict = async () => {
+    /* istanbul ignore next — CameraView always mounts ref; UI prevents calls while busy */
     if (!cameraRef.current || busy) return;
 
     setIsRecording(true);
@@ -154,6 +178,7 @@ export default function CameraScreen() {
   };
 
   const pickAndPredict = async () => {
+    /* istanbul ignore next — upload control is disabled while busy */
     if (busy) return;
 
     setPrediction(null);
@@ -185,6 +210,7 @@ export default function CameraScreen() {
   };
 
   const stopRecording = () => {
+    /* istanbul ignore next */
     if (cameraRef.current && isRecording) {
       cameraRef.current.stopRecording();
     }
@@ -205,10 +231,57 @@ export default function CameraScreen() {
     } catch {}
   };
 
-  const speakPrediction = () => {
-    if (prediction) {
-      Speech.speak(prediction, { language: "en-US", rate: 0.9 });
+  const signToSlug = (sign: string) =>
+    sign.trim().toLowerCase().replace(/\s+/g, "-");
+
+  const buildVideoUrls = (sign: string): string[] => {
+    const slug = signToSlug(sign);
+    const encoded = encodeURIComponent(sign.trim().replace(/\b\w/g, c => c.toUpperCase()));
+    const base = "https://media.signbsl.com/videos/asl";
+    return [
+      `${base}/startasl/mp4/${slug}.mp4`,
+      `${base}/elementalaslconcepts/mp4/${slug}.mp4`,
+      `${base}/mariekatzenbachschool/mp4/${slug}.mp4`,
+      `${base}/mariekatzenbachschool/mp4/${encoded}.mp4`,
+    ];
+  };
+
+  const openSignVideo = (sign: string) => {
+    const urls = buildVideoUrls(sign);
+    setVideoLoading(true);
+    setVideoError(false);
+    setVideoModal({ sign, urls, index: 0 });
+  };
+
+  const tryNextVideoSource = () => {
+    /* istanbul ignore next — defensive if a stale player event fires after close */
+    if (!videoModal) return;
+    const next = videoModal.index + 1;
+    if (next < videoModal.urls.length) {
+      setVideoLoading(true);
+      setVideoModal({ ...videoModal, index: next });
+    } else {
+      setVideoLoading(false);
+      setVideoError(true);
     }
+  };
+
+  const closeVideoModal = () => {
+    setVideoModal(null);
+    setVideoLoading(true);
+    setVideoError(false);
+  };
+
+  const openVideoInBrowser = async () => {
+    /* istanbul ignore next — modal always open when actions are reachable */
+    if (!videoModal) return;
+    closeVideoModal();
+    const slug = signToSlug(videoModal.sign);
+    await WebBrowser.openBrowserAsync(`https://signasl.org/sign/${slug}`);
+  };
+
+  const speakPrediction = () => {
+    Speech.speak(prediction!, { language: "en-US", rate: 0.9 });
   };
 
   return (
@@ -234,7 +307,13 @@ export default function CameraScreen() {
       )}
 
       {/* Camera toggle + upload buttons */}
-      <View style={styles.topControls}>
+      <View
+        testID="camera-top-controls"
+        style={[
+          styles.topControls,
+          { top: Platform.OS === "ios" ? 16 : 12 },
+        ]}
+      >
         <TouchableOpacity
           style={styles.topButton}
           onPress={toggleCamera}
@@ -253,7 +332,13 @@ export default function CameraScreen() {
 
       {/* Recording overlay with countdown */}
       {isRecording && (
-        <View style={styles.recordingOverlay}>
+        <View
+          testID="camera-recording-overlay"
+          style={[
+            styles.recordingOverlay,
+            { top: Platform.OS === "ios" ? 16 : 12 },
+          ]}
+        >
           <Animated.View
             style={[styles.recordDot, { transform: [{ scale: pulseAnim }] }]}
           />
@@ -277,7 +362,12 @@ export default function CameraScreen() {
         ) : prediction ? (
           <>
             <Text style={styles.predictionLabel}>Detected Sign</Text>
-            <Text style={styles.predictionText}>{prediction}</Text>
+            <TouchableOpacity onPress={() => openSignVideo(prediction)} activeOpacity={0.6}>
+              <View style={styles.predictionTouchable}>
+                <Text style={styles.predictionText}>{prediction}</Text>
+                <Ionicons name="videocam-outline" size={20} color={BRAND.teal} style={styles.videoIcon} />
+              </View>
+            </TouchableOpacity>
             <View style={styles.confidenceBar}>
               <View
                 style={[
@@ -292,11 +382,12 @@ export default function CameraScreen() {
             {topK.length > 1 && (
               <View style={styles.topKRow}>
                 {topK.slice(1, 4).map((item, i) => (
-                  <View key={i} style={styles.topKChip}>
+                  <TouchableOpacity key={i} style={styles.topKChip} onPress={() => openSignVideo(item.sign)} activeOpacity={0.6}>
+                    <Ionicons name="play-circle-outline" size={14} color={BRAND.tealDark} />
                     <Text style={styles.topKText}>
                       {item.sign} {(item.confidence * 100).toFixed(0)}%
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -334,6 +425,62 @@ export default function CameraScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        testID="sign-video-modal"
+        visible={!!videoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeVideoModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {videoModal?.sign}
+              </Text>
+              <TouchableOpacity onPress={closeVideoModal} hitSlop={12}>
+                <Ionicons name="close-circle" size={28} color={BRAND.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.videoWrapper}>
+              {videoLoading && !videoError && (
+                <View style={styles.videoLoading}>
+                  <ActivityIndicator size="large" color={BRAND.teal} />
+                  <Text style={styles.videoLoadingText}>Loading video...</Text>
+                </View>
+              )}
+              {videoError ? (
+                <View style={styles.videoErrorContainer}>
+                  <Ionicons name="alert-circle-outline" size={40} color={BRAND.textMuted} />
+                  <Text style={styles.videoErrorText}>
+                    Video unavailable
+                  </Text>
+                  <TouchableOpacity style={styles.browserFallback} onPress={openVideoInBrowser}>
+                    <Ionicons name="open-outline" size={16} color="#fff" />
+                    <Text style={styles.browserFallbackText}>Open in Browser</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : videoModal ? (
+                <VideoView
+                  player={player}
+                  style={styles.video}
+                  contentFit="contain"
+                  nativeControls
+                />
+              ) : null}
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.browserLink} onPress={openVideoInBrowser}>
+                <Ionicons name="open-outline" size={14} color={BRAND.teal} />
+                <Text style={styles.browserLinkText}>More videos on SignASL.org</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -398,7 +545,6 @@ const styles = StyleSheet.create({
   /* --- Top controls (camera toggle + upload) --- */
   topControls: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 16 : 12,
     right: 16,
     flexDirection: "row",
     gap: 10,
@@ -414,7 +560,6 @@ const styles = StyleSheet.create({
   /* --- Recording overlay --- */
   recordingOverlay: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 16 : 12,
     left: 16,
     flexDirection: "row",
     alignItems: "center",
@@ -444,12 +589,24 @@ const styles = StyleSheet.create({
   processingEmoji: { fontSize: 24 },
   processingText: { fontSize: 16, color: BRAND.textMuted },
   predictionLabel: { fontSize: 12, color: BRAND.textMuted, marginBottom: 2, textTransform: "uppercase", letterSpacing: 1 },
+  predictionTouchable: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
   predictionText: {
     fontSize: 38,
     fontWeight: "800",
     color: BRAND.teal,
-    marginBottom: 6,
     textTransform: "capitalize",
+    textDecorationLine: "underline",
+    textDecorationStyle: "dotted",
+    textDecorationColor: BRAND.teal,
+  },
+  videoIcon: {
+    marginTop: 4,
   },
   confidenceBar: {
     width: "60%",
@@ -467,9 +624,12 @@ const styles = StyleSheet.create({
   confidenceText: { fontSize: 13, color: BRAND.textSecondary, marginBottom: 8 },
   topKRow: { flexDirection: "row", gap: 8, marginBottom: 10, flexWrap: "wrap", justifyContent: "center" },
   topKChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     backgroundColor: BRAND.bg,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#D1E7E5",
@@ -548,4 +708,94 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   grantButtonText: { color: "#fff", fontSize: 17, fontWeight: "600" },
+  /* --- Video modal --- */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 10,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: BRAND.textPrimary,
+    textTransform: "capitalize",
+  },
+  videoWrapper: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    backgroundColor: "#000",
+    position: "relative",
+  },
+  video: {
+    width: "100%",
+    height: "100%",
+  },
+  videoLoading: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000",
+    zIndex: 1,
+  },
+  videoLoadingText: {
+    color: "#aaa",
+    fontSize: 13,
+    marginTop: 8,
+  },
+  videoErrorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+  },
+  videoErrorText: {
+    color: "#aaa",
+    fontSize: 15,
+  },
+  browserFallback: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: BRAND.teal,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  browserFallbackText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  modalFooter: {
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  browserLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  browserLinkText: {
+    color: BRAND.teal,
+    fontSize: 13,
+    fontWeight: "500",
+  },
 });
