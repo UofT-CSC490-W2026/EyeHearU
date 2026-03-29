@@ -307,4 +307,34 @@ describe("resolveApiBaseUrl", () => {
     const { API_BASE_URL } = require("../services/api");
     expect(API_BASE_URL).toBe("https://example.com");
   });
+
+  it("adds bypass-tunnel-reminder header when API base URL is a LocalTunnel host", async () => {
+    jest.resetModules();
+    jest.mock("expo-constants", () => ({
+      expoConfig: {
+        extra: { apiBaseUrl: "https://abc123.loca.lt" },
+      },
+    }));
+    const { predictSign } = require("../services/api");
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          sign: "hi",
+          confidence: 1,
+          top_k: [{ sign: "hi", confidence: 1 }],
+        }),
+    });
+    global.fetch = mockFetch;
+
+    await predictSign("file:///clip.mp4");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("abc123.loca.lt"),
+      expect.objectContaining({
+        headers: { "bypass-tunnel-reminder": "true" },
+      })
+    );
+  });
 });
