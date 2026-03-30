@@ -38,6 +38,14 @@ def test_set_seed_deterministic():
     assert torch.equal(a, b)
 
 
+def test_set_seed_calls_cuda_when_available():
+    with patch("i3d_msft.train.torch.cuda.is_available", return_value=True):
+        with patch("i3d_msft.train.torch.cuda.manual_seed_all") as m_cuda:
+            set_seed(7)
+    m_cuda.assert_called()
+    assert all(c.args[0] == 7 for c in m_cuda.call_args_list)
+
+
 # ── get_device ─────────────────────────────────────────────────────────
 
 def test_get_device_cpu():
@@ -214,6 +222,17 @@ def test_select_filenames_limit_zero(tmp_path):
     _write_csv(train, [{"user": "a", "filename": "t1.mp4", "gloss": "hi"}])
     _write_csv(val, [{"user": "b", "filename": "v1.mp4", "gloss": "hi"}])
     result = _select_filenames_with_val_coverage(train, val, limit=0)
+    assert result == []
+
+
+def test_select_filenames_fallback_no_train_budget_skips_inner_replace(tmp_path):
+    """When train_budget is 0, selected_train is empty and inner fallback body is skipped."""
+    train = tmp_path / "train.csv"
+    val = tmp_path / "val.csv"
+    _write_csv(train, [{"user": "a", "filename": "t1.mp4", "gloss": "shared"}])
+    _write_csv(val, [{"user": "b", "filename": "v1.mp4", "gloss": "shared"}])
+    # limit=1 → val_budget=1, train_budget=0 → selected_train=[], val_candidates=[]
+    result = _select_filenames_with_val_coverage(train, val, limit=1)
     assert result == []
 
 

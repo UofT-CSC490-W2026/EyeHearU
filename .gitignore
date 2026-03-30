@@ -1,3 +1,7 @@
+# CI / local coverage JSON (pytest `--cov-report=json:coverage-ci.json`)
+backend/coverage-ci.json
+ml/coverage-ci.json
+
 # Python
 __pycache__/
 *.py[cod]
@@ -11,14 +15,21 @@ env/
 
 # Environment files (contain secrets)
 .env
-**/firebase-credentials.json
+backend/.env
+firebase-credentials.json
+backend/firebase-credentials.json
 
 # ML artifacts (large files)
-**/checkpoints/*.pt
-**/checkpoints/*.onnx
-**/data/raw/
-**/data/processed/
-**/data/metadata/
+ml/checkpoints/*.pt
+ml/checkpoints/*.onnx
+backend/model_cache/
+data/raw/
+data/processed/
+
+# Pipeline run logs and reports (generated locally and on server)
+data/metadata/
+data/processed/
+data/metadata/
 
 # Video clips
 *.mp4
@@ -34,37 +45,36 @@ Thumbs.db
 *.swo
 
 # React Native / Expo
-**/mobile/node_modules/
-**/node_modules/
-**/mobile/.expo/
-**/mobile/dist/
-**/mobile/ios/Pods/
-**/mobile/android/.gradle/
-**/mobile/android/app/build/
+mobile/node_modules/
+mobile/.expo/
+backend/.expo/
+mobile/dist/
+mobile/ios/Pods/
+mobile/android/.gradle/
+mobile/android/app/build/
 
 # Terraform
-**/.terraform/
-**/*.tfstate
-**/*.tfstate.*
+infrastructure/.terraform/
+infrastructure/*.tfstate
+infrastructure/*.tfstate.*
 
 # Misc
 *.log
 *.tmp
 
-# Coverage outputs (regenerate with pytest / jest)
-**/.coverage
-**/.coverage.*
-**/htmlcov/
-backend/coverage.xml
-ml/coverage.xml
+# Coverage / pytest
+.coverage
 coverage.xml
-coverage/
-mobile/coverage/
+htmlcov/
+.pytest_cache/
+backend/.coverage
+backend/coverage.xml
+backend/htmlcov/
+backend/.pytest_cache/
+.hypothesis/
+backend/.hypothesis/
+ml/.pytest_cache/
+ml/.hypothesis/
 
-# Local inference weights (download from S3 or use cache)
-backend/model_cache/*.pt
-
-# Duplicate / draft PDFs under docs (canonical A5 submission is a5/a5.pdf only)
-docs/*.pdf
-
-#a3 / a4 — each nanochat-modal/.gitignore handles its own nanochat/ exclusion
+# Evaluation outputs
+ml/evaluation_results/

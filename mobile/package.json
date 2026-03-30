@@ -16,15 +16,22 @@
     "preset": "jest-expo",
     "collectCoverageFrom": [
       "app/**/*.{ts,tsx}",
-      "services/**/*.{ts,tsx}",
-      "!**/*.d.ts"
+      "services/**/*.ts",
+      "!**/__tests__/**"
     ],
     "coverageThreshold": {
       "global": {
+        "branches": 100,
+        "functions": 100,
         "lines": 100,
-        "functions": 100
+        "statements": 100
       }
     },
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "json-summary"
+    ],
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|@react-native-async-storage/async-storage)"
     ]
@@ -42,6 +49,8 @@
     "expo-router": "~6.0.23",
     "expo-speech": "~14.0.8",
     "expo-status-bar": "~3.0.9",
+    "expo-video": "^2.2.0",
+    "expo-web-browser": "^55.0.10",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-safe-area-context": "~5.6.0",
