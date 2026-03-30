@@ -1,6 +1,6 @@
 ## Eye Hear U
 
-[![CI](https://github.com/MariaMa-GitHub/EyeHearU/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MariaMa-GitHub/EyeHearU/actions/workflows/ci.yml)
+[![CI](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/UofT-CSC490-W2026/EyeHearU/actions/workflows/ci.yml)
 
 **ASL on camera → text and speech on iPhone** — one sign at a time, or a short phrase from several clips in order.
 
