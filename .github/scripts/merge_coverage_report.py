@@ -172,8 +172,9 @@ def main() -> int:
         args.pr_comment.write_text(body, encoding="utf-8")
 
     if args.readme:
-        if not patch_readme(args.readme, body):
-            return 1
+        # Do not treat "no change" as an error; reserve non-zero exits for
+        # clearly invalid situations (e.g., missing coverage files above).
+        patch_readme(args.readme, body)
 
     if not args.pr_comment and not args.readme:
         sys.stdout.write(body)
