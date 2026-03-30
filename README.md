@@ -24,7 +24,8 @@ Infrastructure is provisioned on **AWS** (S3, ECS, etc.) via **Terraform**.
 | ML | **100%** | **100%** |
 | Mobile | **100%** | **100%** |
 
-<sub>Last CI update: (overwritten on each push to <code>main</code>)</sub>
+<sub>Last CI update: 2026-03-30 04:30 UTC</sub>
+<sub><a href="https://github.com/UofT-CSC490-W2026/EyeHearU/actions/runs/23727914266">Workflow run</a></sub>
 <!-- COVERAGE_TABLE_END -->
 
 </details>
